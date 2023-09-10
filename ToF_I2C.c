@@ -28,11 +28,11 @@
 
 //Commands
 
-static const uint8_t *DOWNLOAD_INIT = [0x08, 0x14, 0x01, 0x29, 0xC1];
+static uint8_t DOWNLOAD_INIT[5] = {0x08, 0x14, 0x01, 0x29, 0xC1};
 
-static const uint8_t *SET_FW_ADDR = [0x08, 0x43, 0x02, 0x00, 0x00, 0xBA];
+static uint8_t SET_FW_ADDR[6] = {0x08, 0x43, 0x02, 0x00, 0x00, 0xBA};
 
-static const uint8_t *RAM_REMAP = [0x08, 0x11, 0x00, 0xEE];
+static uint8_t RAM_REMAP[4] = {0x08, 0x11, 0x00, 0xEE};
 
 static const char *TAG = "TOF LOG";
 
@@ -173,11 +173,11 @@ static uint8_t TOF_FIRMWARE_DOWNLOAD(void)
 	unsigned long firmware_idx = 0;
 	uint8_t firmware_length = 64;
 	
-	while(firmware_idx < TOF_BIN_IMAGE_LENGTH)
+	while(firmware_idx < tof_bin_image_length)
 	{
-		unsigned long data_remaining = TOF_BIN_IMAGE_LENGTH - firmware_idx;
+		unsigned long data_remaining = tof_bin_image_length - firmware_idx;
 		if(data_remaining)
-		if(!TOF_FIRMWARE_CMD(firmware_idx, firmware_length)) return 0;
+		if(!TOF_DOWNLOAD_CMD(firmware_idx, firmware_length)) return 0;
 		firmware_idx += firmware_length;
 		
 		if(!TOF_WAIT_UNTIL_READY()) return 0;
@@ -213,7 +213,7 @@ static uint8_t TOF_DOWNLOAD_CMD(unsigned long firmware_idx, uint8_t firmware_len
 	
 	*(cmd_and_data + 1) = 0x41;
 	
-	uint8_t checksum += 0x41;
+	uint8_t checksum = 0x41;
 	
 	*(cmd_and_data + 2) = firmware_length;
 	
@@ -221,9 +221,11 @@ static uint8_t TOF_DOWNLOAD_CMD(unsigned long firmware_idx, uint8_t firmware_len
 	
 	unsigned long current_fw_idx = firmware_idx;
 	
-	ESP_LOGI(TAG, "Creating Data Packet. Packet length is %u. Current FW index is %x.", packet_len, firmware_idx);
+	ESP_LOGI(TAG, "Creating Data Packet. Packet length is %u. Current FW index is %lx.", packet_len, firmware_idx);
+
+	int i = 0;
 	
-	for(int i = 3; i < packet_len - 1; i++)
+	for(i = 3; i < packet_len - 1; i++)
 	{
 		*(cmd_and_data + i) = tof_bin_image[current_fw_idx];
 		checksum += tof_bin_image[current_fw_idx];
