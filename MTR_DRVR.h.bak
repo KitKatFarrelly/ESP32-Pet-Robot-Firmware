@@ -1,0 +1,6 @@
+#ifndef H_MTR_DRVR
+#define H_MTR_DRVR
+
+void MTR_INIT(void);
+
+#endif

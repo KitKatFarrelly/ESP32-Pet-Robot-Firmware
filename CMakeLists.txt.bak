@@ -1,0 +1,2 @@
+idf_component_register(SRCS "ROBOT_APP.c"
+                    INCLUDE_DIRS "")
