@@ -150,19 +150,11 @@ static uint8_t TOF_FIRMWARE_DOWNLOAD(void)
 	//3. Loop writing Firmware into TMF8828 via i2c_conf
 	//4. Restart TMF8288 into application mode
 	
-	// Step 1:
-
-	ESP_LOGI(TAG, "Sending Download Init Command");
-
-	if(TOF_WRITE(DOWNLOAD_INIT, 5) != ESP_OK) return 0;
-
-	if(!TOF_WAIT_UNTIL_READY()) return 0;
-	
 	// Step 2:
 
 	ESP_LOGI(TAG, "Sending FW ADDR Command");
 
-	if(TOF_WRITE(SET_FW_ADDR, 5) != ESP_OK) return 0;
+	if(TOF_WRITE(SET_FW_ADDR, 6) != ESP_OK) return 0;
 	
 	if(!TOF_WAIT_UNTIL_READY()) return 0;
 	
@@ -253,13 +245,13 @@ static uint8_t TOF_DOWNLOAD_CMD(unsigned long firmware_idx, uint8_t firmware_len
 static uint8_t TOF_WAIT_UNTIL_READY(void)
 {
 	//Check that command was received properly. Otherwise return failed
-	uint8_t tof_reg_addr = 0x41;
+	uint8_t tof_reg_addr = 0x08;
 	uint8_t tof_data[3] = {0, 0, 0};
 	for(int i = 0; i < 5; i++) //Attempt 5 times to read return before giving up
 	{
 		if(TOF_READ_WRITE(tof_data, 3, &tof_reg_addr, 1) == ESP_OK)
 		{
-			ESP_LOGI(TAG, "TOF enable return is %x, %x, %x", tof_data[0], tof_data[2], tof_data[2]);
+			ESP_LOGI(TAG, "TOF enable return is %x, %x, %x", tof_data[0], tof_data[1], tof_data[2]);
 			if(tof_data[0] && (tof_data[2] != 0xFF)) 
 			{
 				ESP_LOGE(TAG, "Return code was unexpected.");
