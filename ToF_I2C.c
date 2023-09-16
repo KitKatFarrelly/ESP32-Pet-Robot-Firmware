@@ -81,6 +81,19 @@ void TOF_INIT(void)
 	{
 		ESP_LOGI(TAG, "TOF app initialized successfully.");
 	}
+
+	// Check that we are running TMF8828 firmware
+	uint8_t version_addr = 0x00;
+	uint8_t version_data[3] = {0, 0, 0};
+	if(TOF_READ_WRITE(&version_addr, 1, version_data, 3) == ESP_OK)
+		{
+			ESP_LOGI(TAG, "Appid is %x, minor version is %x, patch version is %x", version_data[0], version_data[1], version_data[2]);
+		}
+}
+
+uint8_t TOF_FACTORY_CALIBRATION(void)
+{
+	
 }
 
 esp_err_t TOF_READ(uint8_t* TOF_OUT, uint8_t dat_size)
