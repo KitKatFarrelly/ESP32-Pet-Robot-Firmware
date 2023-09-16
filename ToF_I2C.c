@@ -83,11 +83,11 @@ void TOF_INIT(void)
 	}
 
 	// Check that we are running TMF8828 firmware
-	uint8_t version_addr = 0x00;
-	uint8_t version_data[3] = {0, 0, 0};
-	if(TOF_READ_WRITE(&version_addr, 1, version_data, 3) == ESP_OK)
+	uint8_t mode_addr = 0x10;
+	uint8_t mode_data = 0;
+	if(TOF_READ_WRITE(&version_addr, 1, &version_data, 1) == ESP_OK)
 		{
-			ESP_LOGI(TAG, "Appid is %x, minor version is %x, patch version is %x", version_data[0], version_data[1], version_data[2]);
+			ESP_LOGI(TAG, "Mode is %x", mode_data);
 		}
 }
 
