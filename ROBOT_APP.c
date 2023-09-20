@@ -66,6 +66,10 @@ void app_main(void)
 	TOF_INIT();
 	
 	IMU_INIT();
+
+	//TODO: Setup for Flash and Console Commands (over USB)
+
+	//TODO: Setup for ESP-NOW
 	
 }
 

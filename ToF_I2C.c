@@ -40,6 +40,7 @@ static uint8_t TOF_FIRMWARE_CHECK(void);
 static uint8_t TOF_FIRMWARE_DOWNLOAD(void);
 static uint8_t TOF_DOWNLOAD_CMD(unsigned long firmware_idx, uint8_t firmware_length);
 static uint8_t TOF_WAIT_UNTIL_READY(void);
+static uint8_t TOF_WAIT_UNTIL_READY_APP(void);
 
 
 void TOF_INIT(void)
@@ -91,9 +92,35 @@ void TOF_INIT(void)
 		}
 }
 
+uint8_t TOF_LOAD_CONFIG(uint8_t config)
+{
+	//Steps:
+
+	//Load Config Page
+
+	//Check command was executed
+	TOF_WAIT_UNTIL_READY_APP();
+
+	//Setup each config register according to input setting
+
+	//Write Command to Write Config Page
+
+	//Check Command was executed
+	TOF_WAIT_UNTIL_READY_APP();
+
+	//Write Interrupt Settings
+
+	//Return if successful
+}
+
 uint8_t TOF_FACTORY_CALIBRATION(void)
 {
-	
+	//Steps:
+}
+
+uint8_t TOF_COLLECT_DATA_FRAME(uint8_t** TOF_DATA_PTR)
+{
+	//Steps:
 }
 
 esp_err_t TOF_READ(uint8_t* TOF_OUT, uint8_t dat_size)
@@ -272,6 +299,36 @@ static uint8_t TOF_WAIT_UNTIL_READY(void)
 			else
 			{
 				return 1;
+			}
+		}
+		else
+		{
+			ESP_LOGE(TAG, "Failed to send i2c command.");
+			return 0;
+		}
+		vTaskDelay(1 / portTICK_PERIOD_MS);
+	}
+	ESP_LOGE(TAG, "Failed to receive correct return code.");
+	return 0;
+}
+
+static uint8_t TOF_WAIT_UNTIL_READY_APP(void)
+{
+	//Same as TOF_WAIT_UNTIL_READY but does not check for checksum.
+	uint8_t tof_reg_addr = 0x08;
+	uint8_t tof_data = 0;
+	for(int i = 0; i < 5; i++) //Attempt 5 times to read return before giving up
+	{
+		if(TOF_READ_WRITE(&tof_data, 1, &tof_reg_addr, 1) == ESP_OK)
+		{
+			ESP_LOGI(TAG, "TOF enable return is %x", tof_data);
+			if(tof_data == 0x00 || tof_data == 0x01) 
+			{
+				return 1;
+			}
+			else
+			{
+				ESP_LOGE(TAG, "Return code was unexpected.");
 			}
 		}
 		else

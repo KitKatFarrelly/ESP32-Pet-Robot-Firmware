@@ -6,7 +6,7 @@ void TOF_INIT(void);
 
 // Load TOF settings determined by config value.
 // TODO: Change config to enum
-uint8_t TOF_LOAD_CONFIG(uint8_t config)
+uint8_t TOF_LOAD_CONFIG(uint8_t config);
 
 // Performs Factory Calibration.
 // If there is an existing factory calibration, load it.
