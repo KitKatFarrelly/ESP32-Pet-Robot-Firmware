@@ -43,7 +43,7 @@ static uint8_t TOF_FIRMWARE_DOWNLOAD(void);
 static uint8_t TOF_DOWNLOAD_CMD(unsigned long firmware_idx, uint8_t firmware_length);
 static uint8_t TOF_WAIT_UNTIL_READY(void);
 static uint8_t TOF_WAIT_UNTIL_READY_APP(void);
-static uint8_t TOF_CHECK_REGISTERS(uint8_t* read_reg, uint8_t comp_reg, uint8_t size);
+static uint8_t TOF_CHECK_REGISTERS(uint8_t* read_reg, uint8_t* comp_reg, uint8_t size);
 
 
 void TOF_INIT(void)
@@ -89,7 +89,7 @@ void TOF_INIT(void)
 	// Check that we are running TMF8828 firmware
 	uint8_t mode_addr = 0x10;
 	uint8_t mode_data = 0;
-	if(TOF_READ_WRITE(&version_addr, 1, &version_data, 1) == ESP_OK)
+	if(TOF_READ_WRITE(&mode_addr, 1, &mode_data, 1) == ESP_OK)
 		{
 			ESP_LOGI(TAG, "Mode is %x", mode_data);
 		}
@@ -158,11 +158,13 @@ uint8_t TOF_LOAD_CONFIG(uint8_t config)
 uint8_t TOF_FACTORY_CALIBRATION(void)
 {
 	//Steps:
+	return 1;
 }
 
 uint8_t TOF_COLLECT_DATA_FRAME(uint8_t** TOF_DATA_PTR)
 {
 	//Steps:
+	return 1;
 }
 
 esp_err_t TOF_READ(uint8_t* TOF_OUT, uint8_t dat_size)
@@ -384,7 +386,7 @@ static uint8_t TOF_WAIT_UNTIL_READY_APP(void)
 	return 1;
 }
 
-static uint8_t TOF_CHECK_REGISTERS(uint8_t* read_reg, uint8_t comp_reg, uint8_t size)
+static uint8_t TOF_CHECK_REGISTERS(uint8_t* read_reg, uint8_t* comp_reg, uint8_t size)
 {
 	uint8_t mismatched_reg_count = 0;
 	for(int i = 0; i < size; i++)
