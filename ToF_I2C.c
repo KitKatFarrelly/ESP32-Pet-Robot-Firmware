@@ -34,6 +34,8 @@ static uint8_t SET_FW_ADDR[6] = {0x08, 0x43, 0x02, 0x00, 0x00, 0xBA};
 
 static uint8_t RAM_REMAP[4] = {0x08, 0x11, 0x00, 0xEE};
 
+static uint8_t CHECK_CONFIG_PAGE_LOADED[4] = {0x16, 0x00, 0xBC, 0x00};
+
 static const char *TAG = "TOF LOG";
 
 static uint8_t TOF_FIRMWARE_CHECK(void);
@@ -41,6 +43,7 @@ static uint8_t TOF_FIRMWARE_DOWNLOAD(void);
 static uint8_t TOF_DOWNLOAD_CMD(unsigned long firmware_idx, uint8_t firmware_length);
 static uint8_t TOF_WAIT_UNTIL_READY(void);
 static uint8_t TOF_WAIT_UNTIL_READY_APP(void);
+static uint8_t TOF_CHECK_REGISTERS(uint8_t* read_reg, uint8_t comp_reg, uint8_t size);
 
 
 void TOF_INIT(void)
@@ -94,23 +97,62 @@ void TOF_INIT(void)
 
 uint8_t TOF_LOAD_CONFIG(uint8_t config)
 {
+	uint8_t write_data[3] = {0, 0, 0};
+	uint8_t read_data[4] = {0, 0, 0, 0};
+	
 	//Steps:
 
 	//Load Config Page
+	write_data[0] = 0x08;
+	write_data[1] = 0x16;
+	if(TOF_WRITE(write_data, 2) != ESP_OK) return 1;
 
 	//Check command was executed
-	TOF_WAIT_UNTIL_READY_APP();
+	if(TOF_WAIT_UNTIL_READY_APP()) return 1;
+	write_data[0] = 0x20;
+	if(TOF_READ_WRITE(write_data, 1, read_data, 4) != ESP_OK) return 1;
+	if(TOF_CHECK_REGISTERS(read_data, CHECK_CONFIG_PAGE_LOADED, 4) > 1)
+	{
+		return 1;
+	}
 
 	//Setup each config register according to input setting
+	//TODO: Maybe add ability to save configurations dynamically?
+	switch(config)
+	{
+		case 0:
+			//example case where measurement period is set to 100 milliseconds
+			write_data[0] = 0x24;
+			write_data[1] = 0x64;
+			write_data[3] = 0x00;
+			if(TOF_WRITE(write_data, 3) != ESP_OK) return 1;
+
+		default:
+			//maybe set a default configuration?
+			break;
+	}
 
 	//Write Command to Write Config Page
+	write_data[0] = 0x08;
+	write_data[1] = 0x15;
+	if(TOF_WRITE(write_data, 2) != ESP_OK) return 1;
 
 	//Check Command was executed
-	TOF_WAIT_UNTIL_READY_APP();
+	if(TOF_WAIT_UNTIL_READY_APP()) return 1;
 
 	//Write Interrupt Settings
+	//For example setting interrupts for results with this
+	write_data[0] = 0xE2;
+	write_data[1] = 0x02;
+	if(TOF_WRITE(write_data, 2) != ESP_OK) return 1;
+
+	//Clear pending interrupts
+	write_data[0] = 0xE1;
+	write_data[1] = 0xFF;
+	if(TOF_WRITE(write_data, 2) != ESP_OK) return 1;
 
 	//Return if successful
+	return 0;
 }
 
 uint8_t TOF_FACTORY_CALIBRATION(void)
@@ -151,7 +193,7 @@ static uint8_t TOF_FIRMWARE_CHECK(void)
 		}
 		else
 		{
-			return 0;
+			return 1;
 		}
 	}
 	tof_reg_addr = 0x00;
@@ -161,7 +203,7 @@ static uint8_t TOF_FIRMWARE_CHECK(void)
 	}
 	else
 	{
-		return 0;
+		return 1;
 	}
 	
 	if(tof_data == 0x03)
@@ -171,15 +213,15 @@ static uint8_t TOF_FIRMWARE_CHECK(void)
 	else if(tof_data == 0x80)
 	{
 		ESP_LOGI(TAG, "Bootloader is running, installing firmware.");
-		if(!TOF_FIRMWARE_DOWNLOAD()) return 0;
+		if(TOF_FIRMWARE_DOWNLOAD()) return 1;
 	}
 	else
 	{
 		ESP_LOGE(TAG, "Something bad happened while checking app id.");
-		return 0;
+		return 1;
 	}
 	
-	return 1;
+	return 0;
 }
 
 static uint8_t TOF_FIRMWARE_DOWNLOAD(void)
@@ -194,9 +236,9 @@ static uint8_t TOF_FIRMWARE_DOWNLOAD(void)
 
 	ESP_LOGI(TAG, "Sending FW ADDR Command");
 
-	if(TOF_WRITE(SET_FW_ADDR, 6) != ESP_OK) return 0;
+	if(TOF_WRITE(SET_FW_ADDR, 6) != ESP_OK) return 1;
 	
-	if(!TOF_WAIT_UNTIL_READY()) return 0;
+	if(TOF_WAIT_UNTIL_READY()) return 1;
 	
 	// Step 3:
 
@@ -209,10 +251,10 @@ static uint8_t TOF_FIRMWARE_DOWNLOAD(void)
 	{
 		unsigned long data_remaining = tof_bin_image_length - firmware_idx;
 		if(data_remaining)
-		if(!TOF_DOWNLOAD_CMD(firmware_idx, firmware_length)) return 0;
+		if(TOF_DOWNLOAD_CMD(firmware_idx, firmware_length)) return 1;
 		firmware_idx += firmware_length;
 		
-		if(!TOF_WAIT_UNTIL_READY()) return 0;
+		if(TOF_WAIT_UNTIL_READY()) return 1;
 	}
 
 	// Step 4:
@@ -225,14 +267,14 @@ static uint8_t TOF_FIRMWARE_DOWNLOAD(void)
 
 	ESP_LOGI(TAG, "Checking that firmware is running");
 
-	if(!TOF_FIRMWARE_CHECK())
+	if(TOF_FIRMWARE_CHECK())
 	{
 		ESP_LOGE(TAG, "Bootloader Download failed.");
 		
-		return 0;
+		return 1;
 	}
 
-	return 1;
+	return 0;
 }
 
 static uint8_t TOF_DOWNLOAD_CMD(unsigned long firmware_idx, uint8_t firmware_length)
@@ -273,12 +315,12 @@ static uint8_t TOF_DOWNLOAD_CMD(unsigned long firmware_idx, uint8_t firmware_len
 	
 	if(i2c_write_err == ESP_OK)
 	{
-		return 1;
+		return 0;
 	}
 	else
 	{
 		ESP_LOGI(TAG, "Failed to send firmware data i2c packet.");
-		return 0;
+		return 1;
 	}
 }
 
@@ -298,18 +340,18 @@ static uint8_t TOF_WAIT_UNTIL_READY(void)
 			}
 			else
 			{
-				return 1;
+				return 0;
 			}
 		}
 		else
 		{
 			ESP_LOGE(TAG, "Failed to send i2c command.");
-			return 0;
+			return 1;
 		}
 		vTaskDelay(1 / portTICK_PERIOD_MS);
 	}
 	ESP_LOGE(TAG, "Failed to receive correct return code.");
-	return 0;
+	return 1;
 }
 
 static uint8_t TOF_WAIT_UNTIL_READY_APP(void)
@@ -324,7 +366,7 @@ static uint8_t TOF_WAIT_UNTIL_READY_APP(void)
 			ESP_LOGI(TAG, "TOF enable return is %x", tof_data);
 			if(tof_data == 0x00 || tof_data == 0x01) 
 			{
-				return 1;
+				return 0;
 			}
 			else
 			{
@@ -334,10 +376,23 @@ static uint8_t TOF_WAIT_UNTIL_READY_APP(void)
 		else
 		{
 			ESP_LOGE(TAG, "Failed to send i2c command.");
-			return 0;
+			return 1;
 		}
 		vTaskDelay(1 / portTICK_PERIOD_MS);
 	}
 	ESP_LOGE(TAG, "Failed to receive correct return code.");
-	return 0;
+	return 1;
+}
+
+static uint8_t TOF_CHECK_REGISTERS(uint8_t* read_reg, uint8_t comp_reg, uint8_t size)
+{
+	uint8_t mismatched_reg_count = 0;
+	for(int i = 0; i < size; i++)
+	{
+		if(read_reg[i] != comp_reg[i])
+		{
+			mismatched_reg_count++;
+		}
+	}
+	return mismatched_reg_count;
 }
