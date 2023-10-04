@@ -15,6 +15,7 @@
 #include "IMU_SPI.h"
 #include "ToF_I2C.h"
 #include "MTR_DRVR.h"
+#include "UART_CMDS.h"
 
 static const char *TAG = "APP LOG";
 
@@ -68,6 +69,8 @@ void app_main(void)
 	IMU_INIT();
 
 	//TODO: Setup for Flash and Console Commands (over USB)
+
+	UART_INIT();
 
 	//TODO: Setup for ESP-NOW
 	
