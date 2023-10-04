@@ -81,7 +81,7 @@ void TOF_INIT(void)
     io_conf.pull_up_en = 0;
     gpio_config(&io_conf);
 	
-	if(TOF_FIRMWARE_CHECK())
+	if(!TOF_FIRMWARE_CHECK())
 	{
 		ESP_LOGI(TAG, "TOF app initialized successfully.");
 	}
@@ -92,6 +92,12 @@ void TOF_INIT(void)
 	if(TOF_READ_WRITE(&mode_addr, 1, &mode_data, 1) == ESP_OK)
 		{
 			ESP_LOGI(TAG, "Mode is %x", mode_data);
+			if(mode_data == 0x00)
+			{
+				uint8_t write_data[2] = {0x08, 0x6C};
+				TOF_WRITE(write_data, 2);
+				TOF_WAIT_UNTIL_READY_APP();
+			}
 		}
 }
 
@@ -198,6 +204,11 @@ static uint8_t TOF_FIRMWARE_CHECK(void)
 			return 1;
 		}
 	}
+	if(tof_data & 0x30)
+	{
+		uint8_t write_data[2] = {0xE0, 0x11};
+		if(TOF_WRITE(write_data, 2) != ESP_OK) return 1;
+	}
 	tof_reg_addr = 0x00;
 	if(TOF_READ_WRITE(&tof_data, 1, &tof_reg_addr, 1) == ESP_OK)
 	{
@@ -258,6 +269,9 @@ static uint8_t TOF_FIRMWARE_DOWNLOAD(void)
 		
 		if(TOF_WAIT_UNTIL_READY()) return 1;
 	}
+
+	uint8_t write_data[2] = {0xE0, 0x21};
+	if(TOF_WRITE(write_data, 2) != ESP_OK) return 1;
 
 	// Step 4:
 
@@ -391,10 +405,12 @@ static uint8_t TOF_CHECK_REGISTERS(uint8_t* read_reg, uint8_t* comp_reg, uint8_t
 	uint8_t mismatched_reg_count = 0;
 	for(int i = 0; i < size; i++)
 	{
+		ESP_LOGI(TAG, "register value is %x.", read_reg[i]);
 		if(read_reg[i] != comp_reg[i])
 		{
 			mismatched_reg_count++;
 		}
 	}
+	ESP_LOGI(TAG, "number of mismatched registers is %d.", mismatched_reg_count);
 	return mismatched_reg_count;
 }

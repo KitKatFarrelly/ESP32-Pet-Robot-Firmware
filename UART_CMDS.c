@@ -3,6 +3,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "tinyusb.h"
+#include "tusb_console.h"
 #include "tusb_cdc_acm.h"
 #include "sdkconfig.h"
 
@@ -34,12 +35,11 @@ static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event)
         ESP_LOGE(TAG, "Read error");
     }
 
-    UART_RUN_CMD(buf, rx_size);
-    /* temporarily comment this part out for writing back
     // write back
     tinyusb_cdcacm_write_queue(itf, buf, rx_size);
     tinyusb_cdcacm_write_flush(itf, 0);
-    */
+
+    UART_RUN_CMD(buf, rx_size);
 }
 
 static void tinyusb_cdc_line_state_changed_callback(int itf, cdcacm_event_t *event)
@@ -52,10 +52,16 @@ static void tinyusb_cdc_line_state_changed_callback(int itf, cdcacm_event_t *eve
 void UART_INIT(void)
 {
     ESP_LOGI(TAG, "USB initialization");
-    tinyusb_config_t tusb_cfg = {}; // the configuration using default values
+    const tinyusb_config_t tusb_cfg = {
+        .device_descriptor = NULL,
+        .string_descriptor = NULL,
+        .external_phy = false,
+        .configuration_descriptor = NULL,
+    };
+
     ESP_ERROR_CHECK(tinyusb_driver_install(&tusb_cfg));
 
-    tinyusb_config_cdcacm_t amc_cfg = {
+    tinyusb_config_cdcacm_t acm_cfg = {
         .usb_dev = TINYUSB_USBDEV_0,
         .cdc_port = TINYUSB_CDC_ACM_0,
         .rx_unread_buf_sz = 64,
@@ -65,11 +71,14 @@ void UART_INIT(void)
         .callback_line_coding_changed = NULL
     };
 
-    ESP_ERROR_CHECK(tusb_cdc_acm_init(&amc_cfg));
+    ESP_ERROR_CHECK(tusb_cdc_acm_init(&acm_cfg));
     /* the second way to register a callback */
     ESP_ERROR_CHECK(tinyusb_cdcacm_register_callback(
                         TINYUSB_CDC_ACM_0,
                         CDC_EVENT_LINE_STATE_CHANGED,
                         &tinyusb_cdc_line_state_changed_callback));
+
+    ESP_ERROR_CHECK(esp_tusb_init_console(0));
+
     ESP_LOGI(TAG, "USB initialization DONE");
 }
