@@ -5,10 +5,20 @@
 #include "tinyusb.h"
 #include "tusb_cdc_acm.h"
 #include "sdkconfig.h"
+
 #include "UART_CMDS.h"
+#include "ToF_I2C.h"
 
 static const char *TAG = "USB_UART";
 static uint8_t buf[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1];
+
+static void UART_RUN_CMD(const char * cmd_buf, size_t cmd_size)
+{
+    if(strncmp(cmd_buf, (const char*) "l", 1) == 0)
+    {
+        TOF_LOAD_CONFIG(0);
+    }
+}
 
 static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event)
 {
@@ -24,9 +34,12 @@ static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event)
         ESP_LOGE(TAG, "Read error");
     }
 
-    /* write back */
+    UART_RUN_CMD(buf, rx_size);
+    /* temporarily comment this part out for writing back
+    // write back
     tinyusb_cdcacm_write_queue(itf, buf, rx_size);
     tinyusb_cdcacm_write_flush(itf, 0);
+    */
 }
 
 static void tinyusb_cdc_line_state_changed_callback(int itf, cdcacm_event_t *event)
