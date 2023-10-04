@@ -12,9 +12,9 @@
 static const char *TAG = "USB_UART";
 static uint8_t buf[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1];
 
-static void UART_RUN_CMD(const char * cmd_buf, size_t cmd_size)
+static void UART_RUN_CMD(const uint8_t * cmd_buf, size_t cmd_size)
 {
-    if(strncmp(cmd_buf, (const char*) "l", 1) == 0)
+    if(strncmp((char*) cmd_buf, (const char*) "l", 1) == 0)
     {
         TOF_LOAD_CONFIG(0);
     }
