@@ -161,6 +161,20 @@ uint8_t TOF_LOAD_CONFIG(uint8_t config)
 	return 0;
 }
 
+uint8_t TOF_RESET(void)
+{
+	ESP_LOGI(TAG, "Resetting ToF into bootloader mode");
+	uint8_t write_data[2] = {0xE0, 0x01};
+	if(TOF_WRITE(write_data, 2) != ESP_OK) return 1;
+	vTaskDelay(1 / portTICK_PERIOD_MS);
+	write_data[0] = 0xF0; 
+	write_data[0] = 0x80;
+	if(TOF_WRITE(write_data, 2) != ESP_OK) return 1;
+	vTaskDelay(10 / portTICK_PERIOD_MS);
+	if(TOF_FIRMWARE_CHECK()) return 1;
+	return 0;
+}
+
 uint8_t TOF_FACTORY_CALIBRATION(void)
 {
 	//Steps:
@@ -192,38 +206,38 @@ static uint8_t TOF_FIRMWARE_CHECK(void)
 {
 	//Check that firmware is correct version. Otherwise download new bootloader
 	uint8_t tof_reg_addr = 0xE0;
-	uint8_t tof_data = 0;
-	while((tof_data & 0xCF) != 0x41) // wait until it is b01xx_0001
+	uint8_t tof_data[3] = {0, 0, 0};
+	while((tof_data[0] & 0xCF) != 0x41) // wait until it is b01xx_0001
 	{
-		if(TOF_READ_WRITE(&tof_data, 1, &tof_reg_addr, 1) == ESP_OK)
+		if(TOF_READ_WRITE(tof_data, 1, &tof_reg_addr, 1) == ESP_OK)
 		{
-			ESP_LOGI(TAG, "TOF enable return is %x", tof_data);
+			ESP_LOGI(TAG, "TOF enable return is %x", tof_data[0]);
 		}
 		else
 		{
 			return 1;
 		}
 	}
-	if(tof_data & 0x30)
-	{
-		uint8_t write_data[2] = {0xE0, 0x11};
-		if(TOF_WRITE(write_data, 2) != ESP_OK) return 1;
-	}
 	tof_reg_addr = 0x00;
-	if(TOF_READ_WRITE(&tof_data, 1, &tof_reg_addr, 1) == ESP_OK)
+	if(TOF_READ_WRITE(tof_data, 3, &tof_reg_addr, 1) == ESP_OK)
 	{
-		ESP_LOGI(TAG, "TOF appid is %x", tof_data);
+		ESP_LOGI(TAG, "TOF appid is %x, %x, %x", tof_data[0], tof_data[1], tof_data[2]);
 	}
 	else
 	{
 		return 1;
 	}
 	
-	if(tof_data == 0x03)
+	if(tof_data[0] == 0x03)
 	{
 		ESP_LOGI(TAG, "TOF app is running.");
+		tof_reg_addr = 0x04;
+		if(TOF_READ_WRITE(tof_data, 1, &tof_reg_addr, 1) == ESP_OK)
+		{
+			ESP_LOGI(TAG, "App Status is %x", tof_data[0]);
+		}
 	}
-	else if(tof_data == 0x80)
+	else if(tof_data[0] == 0x80)
 	{
 		ESP_LOGI(TAG, "Bootloader is running, installing firmware.");
 		if(TOF_FIRMWARE_DOWNLOAD()) return 1;
@@ -231,6 +245,11 @@ static uint8_t TOF_FIRMWARE_CHECK(void)
 	else
 	{
 		ESP_LOGE(TAG, "Something bad happened while checking app id.");
+		tof_reg_addr = 0x04;
+		if(TOF_READ_WRITE(tof_data, 1, &tof_reg_addr, 1) == ESP_OK)
+		{
+			ESP_LOGI(TAG, "App Status is %x", tof_data[0]);
+		}
 		return 1;
 	}
 	

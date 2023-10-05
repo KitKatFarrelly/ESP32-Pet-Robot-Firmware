@@ -15,7 +15,7 @@
 #include "IMU_SPI.h"
 #include "ToF_I2C.h"
 #include "MTR_DRVR.h"
-//#include "UART_CMDS.h"
+#include "UART_CMDS.h"
 
 static const char *TAG = "APP LOG";
 
@@ -58,7 +58,7 @@ void app_main(void)
     io_conf.pull_up_en = 0;
     gpio_config(&io_conf);
 
-	//UART_INIT();
+	UART_INIT();
 	
 	//Initialize all components
 	

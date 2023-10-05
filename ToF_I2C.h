@@ -8,6 +8,8 @@ void TOF_INIT(void);
 // TODO: Change config to enum
 uint8_t TOF_LOAD_CONFIG(uint8_t config);
 
+uint8_t TOF_RESET(void);
+
 // Performs Factory Calibration.
 // If there is an existing factory calibration, load it.
 // Return Failure if SPAD map does not match between sensor and factory calibration.

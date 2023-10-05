@@ -15,9 +15,71 @@ static uint8_t buf[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1];
 
 static void UART_RUN_CMD(const uint8_t * cmd_buf, size_t cmd_size)
 {
+    uint8_t i = 0;
     if(strncmp((char*) cmd_buf, (const char*) "l", 1) == 0)
     {
         TOF_LOAD_CONFIG(0);
+    }
+    else if(strncmp((char*) cmd_buf, (const char*) "o", 1) == 0)
+    {
+        TOF_RESET();
+    }
+    else if(strncmp((char*) cmd_buf, (const char*) "r", 1) == 0)
+    {
+        if(cmd_size < 6)
+        {
+            ESP_LOGE(TAG, "Incorrect size args");
+            return;
+        }
+        uint8_t read_reg = ((cmd_buf[2] - '0') * 16) + (cmd_buf[3] - '0');
+
+        uint8_t read_bytes = 0;
+        for(i = 5; i < cmd_size; i++)
+        {
+            if(cmd_buf[i] >= '0' && cmd_buf[i] <= '9')
+            {
+                read_bytes = read_bytes * 10;
+                read_bytes += (cmd_buf[i] - '0');
+            }
+        }
+        uint8_t* read_data = malloc(read_bytes * sizeof(uint8_t));
+        ESP_LOGI(TAG, "Reading %d bytes from register 0x%x", read_bytes, read_reg);
+        TOF_READ_WRITE(read_data, read_bytes, &read_reg, 1);
+        ESP_LOGI(TAG, "Read the following bytes: ");
+        for(i = 0; i < read_bytes; i++)
+        {
+            ESP_LOGI(TAG, "%x", read_data[i]);
+        }
+    }
+    else if(strncmp((char*) cmd_buf, (const char*) "w", 1) == 0)
+    {
+        uint8_t write_cnt = 0;
+        uint8_t write_bytes[20] = {0};
+        bool is_lsb = false;
+        for(i = 1; i < cmd_size; i++)
+        {
+            if(cmd_buf[i] >= '0' && cmd_buf[i] <= '9')
+            {
+                if(is_lsb)
+                {
+                    write_bytes[write_cnt] += ((cmd_buf[i] - '0'));
+                    is_lsb = false;
+                    write_cnt++;
+                }
+                else
+                {
+                    write_bytes[write_cnt] = ((cmd_buf[i] - '0') * 16);
+                    is_lsb = true;
+                }
+            }
+        }
+        write_bytes[write_cnt] = 0;
+        ESP_LOGI(TAG, "Writing %d bytes to register 0x%x: ", write_cnt, write_bytes[0]);
+        for(i = 0; i < write_cnt; i++)
+        {
+            ESP_LOGI(TAG, "%x", write_bytes[i]);
+        }
+        TOF_WRITE(write_bytes, write_cnt);
     }
 }
 
