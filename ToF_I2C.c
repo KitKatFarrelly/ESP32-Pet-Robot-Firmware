@@ -44,6 +44,8 @@ static uint8_t TOF_DOWNLOAD_CMD(unsigned long firmware_idx, uint8_t firmware_len
 static uint8_t TOF_WAIT_UNTIL_READY(void);
 static uint8_t TOF_WAIT_UNTIL_READY_APP(void);
 static uint8_t TOF_CHECK_REGISTERS(uint8_t* read_reg, uint8_t* comp_reg, uint8_t size);
+static esp_err_t TOF_READ_WRITE_APP(uint8_t* TOF_OUT, uint8_t out_dat_size, uint8_t* TOF_IN, uint8_t in_dat_size, uint8_t wait_ms);
+static esp_err_t TOF_WRITE_APP(uint8_t* TOF_IN, uint8_t dat_size, uint8_t wait_ms);
 
 
 void TOF_INIT(void)
@@ -89,16 +91,16 @@ void TOF_INIT(void)
 	// Check that we are running TMF8828 firmware
 	uint8_t mode_addr = 0x10;
 	uint8_t mode_data = 0;
-	if(TOF_READ_WRITE(&mode_addr, 1, &mode_data, 1) == ESP_OK)
+	if(TOF_READ_WRITE_APP(&mode_addr, 1, &mode_data, 1, 5) == ESP_OK)
+	{
+		ESP_LOGI(TAG, "Mode is %x", mode_data);
+		if(mode_data == 0x00)
 		{
-			ESP_LOGI(TAG, "Mode is %x", mode_data);
-			if(mode_data == 0x00)
-			{
-				uint8_t write_data[2] = {0x08, 0x6C};
-				TOF_WRITE(write_data, 2);
-				TOF_WAIT_UNTIL_READY_APP();
-			}
+			uint8_t write_data[2] = {0x08, 0x6C};
+			TOF_WRITE_APP(write_data, 2, 5);
+			TOF_WAIT_UNTIL_READY_APP();
 		}
+	}
 }
 
 uint8_t TOF_LOAD_CONFIG(uint8_t config)
@@ -111,12 +113,12 @@ uint8_t TOF_LOAD_CONFIG(uint8_t config)
 	//Load Config Page
 	write_data[0] = 0x08;
 	write_data[1] = 0x16;
-	if(TOF_WRITE(write_data, 2) != ESP_OK) return 1;
+	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
 
 	//Check command was executed
 	if(TOF_WAIT_UNTIL_READY_APP()) return 1;
 	write_data[0] = 0x20;
-	if(TOF_READ_WRITE(write_data, 1, read_data, 4) != ESP_OK) return 1;
+	if(TOF_READ_WRITE_APP(write_data, 1, read_data, 4, 5) != ESP_OK) return 1;
 	if(TOF_CHECK_REGISTERS(read_data, CHECK_CONFIG_PAGE_LOADED, 4) > 1)
 	{
 		return 1;
@@ -131,7 +133,7 @@ uint8_t TOF_LOAD_CONFIG(uint8_t config)
 			write_data[0] = 0x24;
 			write_data[1] = 0x64;
 			write_data[3] = 0x00;
-			if(TOF_WRITE(write_data, 3) != ESP_OK) return 1;
+			if(TOF_WRITE_APP(write_data, 3, 5) != ESP_OK) return 1;
 
 		default:
 			//maybe set a default configuration?
@@ -141,7 +143,7 @@ uint8_t TOF_LOAD_CONFIG(uint8_t config)
 	//Write Command to Write Config Page
 	write_data[0] = 0x08;
 	write_data[1] = 0x15;
-	if(TOF_WRITE(write_data, 2) != ESP_OK) return 1;
+	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
 
 	//Check Command was executed
 	if(TOF_WAIT_UNTIL_READY_APP()) return 1;
@@ -150,12 +152,12 @@ uint8_t TOF_LOAD_CONFIG(uint8_t config)
 	//For example setting interrupts for results with this
 	write_data[0] = 0xE2;
 	write_data[1] = 0x02;
-	if(TOF_WRITE(write_data, 2) != ESP_OK) return 1;
+	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
 
 	//Clear pending interrupts
 	write_data[0] = 0xE1;
 	write_data[1] = 0xFF;
-	if(TOF_WRITE(write_data, 2) != ESP_OK) return 1;
+	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
 
 	//Return if successful
 	return 0;
@@ -165,11 +167,11 @@ uint8_t TOF_RESET(void)
 {
 	ESP_LOGI(TAG, "Resetting ToF into bootloader mode");
 	uint8_t write_data[2] = {0xE0, 0x01};
-	if(TOF_WRITE(write_data, 2) != ESP_OK) return 1;
+	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
 	vTaskDelay(1 / portTICK_PERIOD_MS);
 	write_data[0] = 0xF0; 
 	write_data[0] = 0x80;
-	if(TOF_WRITE(write_data, 2) != ESP_OK) return 1;
+	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
 	vTaskDelay(10 / portTICK_PERIOD_MS);
 	if(TOF_FIRMWARE_CHECK()) return 1;
 	return 0;
@@ -181,10 +183,30 @@ uint8_t TOF_FACTORY_CALIBRATION(void)
 	return 1;
 }
 
+uint8_t TOF_RESET_FACTORY_CALIBRATION(void)
+{
+	//Steps:
+	return 1;
+}
+
 uint8_t TOF_COLLECT_DATA_FRAME(uint8_t** TOF_DATA_PTR)
 {
 	//Steps:
 	return 1;
+}
+
+static esp_err_t TOF_READ_WRITE_APP(uint8_t* TOF_OUT, uint8_t out_dat_size, uint8_t* TOF_IN, uint8_t in_dat_size, uint8_t wait_ms)
+{
+	esp_err_t err = TOF_READ_WRITE(TOF_OUT, out_dat_size, TOF_IN, in_dat_size);
+	vTaskDelay(wait_ms / portTICK_PERIOD_MS);
+	return err;
+}
+
+static esp_err_t TOF_WRITE_APP(uint8_t* TOF_IN, uint8_t dat_size, uint8_t wait_ms)
+{
+	esp_err_t err = TOF_WRITE(TOF_IN, dat_size);
+	vTaskDelay(wait_ms / portTICK_PERIOD_MS);
+	return err;
 }
 
 esp_err_t TOF_READ(uint8_t* TOF_OUT, uint8_t dat_size)
@@ -396,7 +418,7 @@ static uint8_t TOF_WAIT_UNTIL_READY_APP(void)
 	uint8_t tof_data = 0;
 	for(int i = 0; i < 5; i++) //Attempt 5 times to read return before giving up
 	{
-		if(TOF_READ_WRITE(&tof_data, 1, &tof_reg_addr, 1) == ESP_OK)
+		if(TOF_READ_WRITE_APP(&tof_data, 1, &tof_reg_addr, 1, 5) == ESP_OK)
 		{
 			ESP_LOGI(TAG, "TOF enable return is %x", tof_data);
 			if(tof_data == 0x00 || tof_data == 0x01) 
