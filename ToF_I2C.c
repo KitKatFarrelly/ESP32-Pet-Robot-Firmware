@@ -42,10 +42,12 @@ static uint8_t TOF_FIRMWARE_CHECK(void);
 static uint8_t TOF_FIRMWARE_DOWNLOAD(void);
 static uint8_t TOF_DOWNLOAD_CMD(unsigned long firmware_idx, uint8_t firmware_length);
 static uint8_t TOF_WAIT_UNTIL_READY(void);
-static uint8_t TOF_WAIT_UNTIL_READY_APP(void);
+static uint8_t TOF_WAIT_UNTIL_READY_APP(uint8_t delay_between_attempts);
 static uint8_t TOF_CHECK_REGISTERS(uint8_t* read_reg, uint8_t* comp_reg, uint8_t size);
 static esp_err_t TOF_READ_WRITE_APP(uint8_t* TOF_OUT, uint8_t out_dat_size, uint8_t* TOF_IN, uint8_t in_dat_size, uint8_t wait_ms);
 static esp_err_t TOF_WRITE_APP(uint8_t* TOF_IN, uint8_t dat_size, uint8_t wait_ms);
+
+static bool s_is_tmf8828_mode = false;
 
 
 void TOF_INIT(void)
@@ -83,6 +85,8 @@ void TOF_INIT(void)
     io_conf.pull_up_en = 0;
     gpio_config(&io_conf);
 	
+	s_is_tmf8828_mode = false;
+	
 	if(!TOF_FIRMWARE_CHECK())
 	{
 		ESP_LOGI(TAG, "TOF app initialized successfully.");
@@ -98,8 +102,9 @@ void TOF_INIT(void)
 		{
 			uint8_t write_data[2] = {0x08, 0x6C};
 			TOF_WRITE_APP(write_data, 2, 5);
-			TOF_WAIT_UNTIL_READY_APP();
+			TOF_WAIT_UNTIL_READY_APP(3);
 		}
+		s_is_tmf8828_mode = true; //assume that we were succssful in setting tmf8828 mode
 	}
 }
 
@@ -116,7 +121,7 @@ uint8_t TOF_LOAD_CONFIG(uint8_t config)
 	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
 
 	//Check command was executed
-	if(TOF_WAIT_UNTIL_READY_APP()) return 1;
+	if(TOF_WAIT_UNTIL_READY_APP(3)) return 1;
 	write_data[0] = 0x20;
 	if(TOF_READ_WRITE_APP(write_data, 1, read_data, 4, 5) != ESP_OK) return 1;
 	if(TOF_CHECK_REGISTERS(read_data, CHECK_CONFIG_PAGE_LOADED, 4) > 1)
@@ -146,7 +151,7 @@ uint8_t TOF_LOAD_CONFIG(uint8_t config)
 	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
 
 	//Check Command was executed
-	if(TOF_WAIT_UNTIL_READY_APP()) return 1;
+	if(TOF_WAIT_UNTIL_READY_APP(3)) return 1;
 
 	//Write Interrupt Settings
 	//For example setting interrupts for results with this
@@ -168,31 +173,166 @@ uint8_t TOF_RESET(void)
 	ESP_LOGI(TAG, "Resetting ToF into bootloader mode");
 	uint8_t write_data[2] = {0xE0, 0x01};
 	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
-	vTaskDelay(1 / portTICK_PERIOD_MS);
 	write_data[0] = 0xF0; 
 	write_data[0] = 0x80;
 	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
-	vTaskDelay(10 / portTICK_PERIOD_MS);
 	if(TOF_FIRMWARE_CHECK()) return 1;
 	return 0;
 }
 
 uint8_t TOF_FACTORY_CALIBRATION(void)
 {
-	//Steps:
-	return 1;
+	uint8_t number_of_factory_calibrations = (s_is_tmf8828_mode) ? 4 : 1;
+	uint8_t write_data[2] = {0, 0};
+	
+	// Steps:
+
+	// Reset Factory Calibration Counter
+	write_data[0] = 0x08;
+	write_data[1] = 0x1F;
+	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
+
+	for(int i = 0; i < number_of_factory_calibrations; i++)
+	{
+		// Start Factory Calibration
+		write_data[0] = 0x08;
+		write_data[1] = 0x20;
+		if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
+
+		// Check command was executed
+		if(TOF_WAIT_UNTIL_READY_APP(1000)) return 1;
+	}
+
+	return 0;
+}
+
+uint8_t TOF_STORE_FACTORY_CALIBRATION(void)
+{
+	uint8_t number_of_factory_calibrations = (s_is_tmf8828_mode) ? 4 : 1;
+	uint8_t write_data[2] = {0, 0};
+	uint8_t read_data[64] = {0};
+
+	// Steps:
+	
+	// Reset Factory Calibration Counter
+	write_data[0] = 0x08;
+	write_data[1] = 0x1F;
+	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
+
+	for(int i = 0; i < number_of_factory_calibrations; i++)
+	{
+		// Load Factory Calibration Page
+		write_data[0] = 0x08;
+		write_data[1] = 0x19;
+		if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
+
+		// Check command was executed
+		if(TOF_WAIT_UNTIL_READY_APP(3)) return 1;
+
+		// Read out Factory Calibration
+		for(int j = 0; j < 3; j++)
+		{
+			write_data[0] = 0x20 + (j * 0x40);
+			if(TOF_READ_WRITE_APP(write_data, 1, read_data, 64, 5) == ESP_OK)
+			{
+				//Append Read data to factory calibration storage in SPI
+			}
+			else
+			{
+				return 1;
+			}
+		}
+
+		if(i < number_of_factory_calibrations - 1)
+		{
+			// Write Page Config to go to next Calibration
+			write_data[0] = 0x08;
+			write_data[1] = 0x15;
+			if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
+
+			// Check command was executed
+			if(TOF_WAIT_UNTIL_READY_APP(3)) return 1;
+		}
+	}
+
+	return 0;
+}
+
+uint8_t TOF_LOAD_FACTORY_CALIBRATION(void)
+{
+	uint8_t number_of_factory_calibrations = (s_is_tmf8828_mode) ? 4 : 1;
+	uint8_t write_data[65] = {0};
+	uint8_t factory_counter = 0;
+	uint8_t* factory_calibration;
+
+	// Steps:
+	
+	// Reset Factory Calibration Counter
+	write_data[0] = 0x08;
+	write_data[1] = 0x1F;
+	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
+
+	for(int i = 0; i < number_of_factory_calibrations; i++)
+	{
+		// Load Factory Calibration Page
+		write_data[0] = 0x08;
+		write_data[1] = 0x19;
+		if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
+
+		// Check command was executed
+		if(TOF_WAIT_UNTIL_READY_APP(3)) return 1;
+
+		// Get Factory Calibration from memory
+		factory_calibration = NULL; //Need to get pointer from SPI memory API
+		
+		// write factory calibration to memory
+		while(factory_counter < 0xC0)
+		{
+			uint8_t dat_size = 0xC0 - factory_counter;
+			if(dat_size > 0x40)
+			{
+				dat_size = 0x40;
+			}
+			write_data[0] = 0x24 + (factory_counter);
+			memncpy((write_data + 1), (factory_calibration + factory_counter + 4), dat_size);
+			if(TOF_WRITE_APP(write_data, dat_size + 1, 5) != ESP_OK) return 1;
+			factory_counter += dat_size;
+		}
+
+		// Write Page Config to go to next Calibration
+		write_data[0] = 0x08;
+		write_data[1] = 0x15;
+		if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
+
+		// Check command was executed
+		if(TOF_WAIT_UNTIL_READY_APP(3)) return 1;
+	}
 }
 
 uint8_t TOF_RESET_FACTORY_CALIBRATION(void)
 {
 	//Steps:
-	return 1;
+	return 0;
+}
+
+uint8_t TOF_RETURN_CALIBRATION_STATUS(void)
+{
+	uint8_t tof_reg_addr = 0x07;
+	uint8_t tof_data = 0;
+	if(TOF_READ_WRITE_APP(&tof_data, 1, &tof_reg_addr, 1, 5) == ESP_OK)
+	{
+		return tof_data;
+	}
+	else
+	{
+		return 1;
+	}
 }
 
 uint8_t TOF_COLLECT_DATA_FRAME(uint8_t** TOF_DATA_PTR)
 {
 	//Steps:
-	return 1;
+	return 0;
 }
 
 static esp_err_t TOF_READ_WRITE_APP(uint8_t* TOF_OUT, uint8_t out_dat_size, uint8_t* TOF_IN, uint8_t in_dat_size, uint8_t wait_ms)
@@ -411,7 +551,7 @@ static uint8_t TOF_WAIT_UNTIL_READY(void)
 	return 1;
 }
 
-static uint8_t TOF_WAIT_UNTIL_READY_APP(void)
+static uint8_t TOF_WAIT_UNTIL_READY_APP(uint8_t delay_between_attempts)
 {
 	//Same as TOF_WAIT_UNTIL_READY but does not check for checksum.
 	uint8_t tof_reg_addr = 0x08;
@@ -435,7 +575,7 @@ static uint8_t TOF_WAIT_UNTIL_READY_APP(void)
 			ESP_LOGE(TAG, "Failed to send i2c command.");
 			return 1;
 		}
-		vTaskDelay(1 / portTICK_PERIOD_MS);
+		vTaskDelay(delay_between_attempts / portTICK_PERIOD_MS);
 	}
 	ESP_LOGE(TAG, "Failed to receive correct return code.");
 	return 1;

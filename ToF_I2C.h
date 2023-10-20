@@ -15,6 +15,19 @@ uint8_t TOF_RESET(void);
 // Return Failure if SPAD map does not match between sensor and factory calibration.
 uint8_t TOF_FACTORY_CALIBRATION(void);
 
+// Store Factory Calibration to Flash Memory
+uint8_t TOF_STORE_FACTORY_CALIBRATION(void);
+
+// Load Factory Calibration from Flash Memory
+uint8_t TOF_LOAD_FACTORY_CALIBRATION(void);
+
+// Returns the Calibration status of the device
+// 0 means successful calibration
+// 0x31 means no calibration was set; it is using default calibration
+// 0x32 means calibration was set for the wrong SPAD map
+// 1 means there was an error in reading from the device
+uint8_t TOF_RETURN_CALIBRATION_STATUS(void);
+
 // Removes Factory Calibration from Flash and sensor, if one exists.
 uint8_t TOF_RESET_FACTORY_CALIBRATION(void);
 
