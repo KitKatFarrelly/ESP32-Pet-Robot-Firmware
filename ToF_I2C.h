@@ -1,6 +1,13 @@
 #ifndef H_TOF_DRVR
 #define H_TOF_DRVR
 
+typedef struct
+{
+    uint8_t** depth_pixel_field;
+    uint8_t horizontal_size;
+    uint8_t vertical_size;
+} TOF_DATA_t;
+
 // Initializes firmware on TOF sensor.
 void TOF_INIT(void);
 
@@ -28,11 +35,11 @@ uint8_t TOF_LOAD_FACTORY_CALIBRATION(void);
 // 1 means there was an error in reading from the device
 uint8_t TOF_RETURN_CALIBRATION_STATUS(void);
 
-// Removes Factory Calibration from Flash and sensor, if one exists.
-uint8_t TOF_RESET_FACTORY_CALIBRATION(void);
+// Tells TOF Sensor to start measuring data, with a pointer to a data ring buffer.
+uint8_t TOF_START_MEASUREMENTS(TOF_DATA_t* TOF_DATA_PTR, uint8_t ring_buf_size);
 
-// Returns a single frame of data from the sensor. Returns data size if successful, 0 if failure.
-uint8_t TOF_COLLECT_DATA_FRAME(uint8_t** TOF_DATA_PTR);
+// Tells TOF Sensor to stop measuring data.
+uint8_t TOF_STOP_MEASUREMENTS(void);
 
 // Read Data directly from Sensor without referring to a register.
 esp_err_t TOF_READ(uint8_t* TOF_OUT, uint8_t dat_size);

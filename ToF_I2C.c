@@ -38,6 +38,8 @@ static uint8_t CHECK_CONFIG_PAGE_LOADED[4] = {0x16, 0x00, 0xBC, 0x00};
 
 static const char *TAG = "TOF LOG";
 
+// Internal Functions
+
 static uint8_t TOF_FIRMWARE_CHECK(void);
 static uint8_t TOF_FIRMWARE_DOWNLOAD(void);
 static uint8_t TOF_DOWNLOAD_CMD(unsigned long firmware_idx, uint8_t firmware_length);
@@ -47,7 +49,15 @@ static uint8_t TOF_CHECK_REGISTERS(uint8_t* read_reg, uint8_t* comp_reg, uint8_t
 static esp_err_t TOF_READ_WRITE_APP(uint8_t* TOF_OUT, uint8_t out_dat_size, uint8_t* TOF_IN, uint8_t in_dat_size, uint8_t wait_ms);
 static esp_err_t TOF_WRITE_APP(uint8_t* TOF_IN, uint8_t dat_size, uint8_t wait_ms);
 
+// Internal Variables
+
 static bool s_is_tmf8828_mode = false;
+static TOF_DATA_t* s_ring_buffer_ptr = NULL;
+static uint8_t s_ring_buffer_size = 0;
+
+// Interrupt Handler
+
+static void TOF_MEASUREMENT_INTR_HANDLE(void);
 
 
 void TOF_INIT(void)
@@ -86,6 +96,8 @@ void TOF_INIT(void)
     gpio_config(&io_conf);
 	
 	s_is_tmf8828_mode = false;
+	s_ring_buffer_ptr = NULL;
+	s_ring_buffer_size = 0;
 	
 	if(!TOF_FIRMWARE_CHECK())
 	{
@@ -309,12 +321,6 @@ uint8_t TOF_LOAD_FACTORY_CALIBRATION(void)
 	}
 }
 
-uint8_t TOF_RESET_FACTORY_CALIBRATION(void)
-{
-	//Steps:
-	return 0;
-}
-
 uint8_t TOF_RETURN_CALIBRATION_STATUS(void)
 {
 	uint8_t tof_reg_addr = 0x07;
@@ -329,9 +335,25 @@ uint8_t TOF_RETURN_CALIBRATION_STATUS(void)
 	}
 }
 
-uint8_t TOF_COLLECT_DATA_FRAME(uint8_t** TOF_DATA_PTR)
+uint8_t TOF_START_MEASUREMENTS(TOF_DATA_t* TOF_DATA_PTR, uint8_t ring_buf_size)
 {
-	//Steps:
+	uint8_t write_data[2] = {0, 0};
+	write_data[0] = 0x08;
+	write_data[1] = 0x10;
+	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
+	s_ring_buffer_ptr = TOF_DATA_PTR;
+	s_ring_buffer_size = ring_buf_size;
+	return 0;
+}
+
+uint8_t TOF_STOP_MEASUREMENTS(void)
+{
+	uint8_t write_data[2] = {0, 0};
+	write_data[0] = 0x08;
+	write_data[1] = 0xFF;
+	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
+	s_ring_buffer_ptr = NULL;
+	s_ring_buffer_size = 0;
 	return 0;
 }
 
@@ -594,4 +616,9 @@ static uint8_t TOF_CHECK_REGISTERS(uint8_t* read_reg, uint8_t* comp_reg, uint8_t
 	}
 	ESP_LOGI(TAG, "number of mismatched registers is %d.", mismatched_reg_count);
 	return mismatched_reg_count;
+}
+
+static void TOF_MEASUREMENT_INTR_HANDLE(void)
+{
+
 }
