@@ -7,6 +7,8 @@
 
 #include "ToF_I2C.h"
 #include "tof_bin_image.h"
+#include "MESSAGE_QUEUE.h"
+#include "FLASH_SPI.h"
 
 //I2C definitions
 
@@ -21,6 +23,7 @@
 #define TOF_SENSOR_ADDR                 0x41        /*!< Slave address of the TOF sensor */
 
 #define TOF_EN   GPIO_NUM_18
+#define TOF_INTR GPIO_NUM_15
 
 //Defines
 
@@ -54,10 +57,21 @@ static esp_err_t TOF_WRITE_APP(uint8_t* TOF_IN, uint8_t dat_size, uint8_t wait_m
 static bool s_is_tmf8828_mode = false;
 static TOF_DATA_t* s_ring_buffer_ptr = NULL;
 static uint8_t s_ring_buffer_size = 0;
+static uint8_t s_measurement_iter = 0;
+static uint8_t s_measurement_buffer[4][132] = {0};
+static uint8_t s_measurement_flags = 0;
 
 // Interrupt Handler
 
 static void TOF_MEASUREMENT_INTR_HANDLE(void);
+
+// Task Handling
+
+// Message Handler
+static void TOF_MESSAGE_HANDLER(void);
+
+// Task to Convert Read Buffer to a distance array
+static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void);
 
 
 void TOF_INIT(void)
@@ -94,10 +108,24 @@ void TOF_INIT(void)
     //enable pull-up mode
     io_conf.pull_up_en = 0;
     gpio_config(&io_conf);
+
+	//TOF INTERRUPT
+
+	//interrupt of rising edge
+    io_conf.intr_type = GPIO_INTR_NEGEDGE;
+    //bit mask of the battery stat
+    io_conf.pin_bit_mask = (1ULL<<TOF_INTR);
+    //set as input mode
+    io_conf.mode = GPIO_MODE_INPUT;
+    //enable pull-up mode
+    io_conf.pull_up_en = 1;
+    gpio_config(&io_conf);
 	
 	s_is_tmf8828_mode = false;
 	s_ring_buffer_ptr = NULL;
 	s_ring_buffer_size = 0;
+	s_measurement_iter = 0;
+	s_measurement_flags = 0;
 	
 	if(!TOF_FIRMWARE_CHECK())
 	{
@@ -118,6 +146,9 @@ void TOF_INIT(void)
 		}
 		s_is_tmf8828_mode = true; //assume that we were succssful in setting tmf8828 mode
 	}
+
+	//TOF INTERRUPT HANDLER
+	gpio_isr_handler_add(TOF_INTR, TOF_MEASUREMENT_INTR_HANDLE, NULL);
 }
 
 uint8_t TOF_LOAD_CONFIG(uint8_t config)
@@ -618,7 +649,54 @@ static uint8_t TOF_CHECK_REGISTERS(uint8_t* read_reg, uint8_t* comp_reg, uint8_t
 	return mismatched_reg_count;
 }
 
+static void TOF_MESSAGE_HANDLER(void)
+{
+	
+}
+
+static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
+{
+	return 0;
+}
+
 static void TOF_MEASUREMENT_INTR_HANDLE(void)
 {
+	uint8_t number_of_measurements = (s_is_tmf8828_mode) ? 4 : 1;
+	uint8_t write_data[2] = {0, 0};
+	uint8_t read_data[1] = {0};
 
+	// Steps:
+
+	//Exit early if we are overwriting the buffer
+	if(s_measurement_flags & (0x01 << s_measurement_iter)) return;
+
+	//Read Interrupt Settings
+	//For example setting interrupts for results with this
+	write_data[0] = 0xE1;
+	if(TOF_READ_WRITE_APP(write_data, 1, read_data, 1, 1) != ESP_OK) return;
+
+	ESP_LOGI(TAG, "interrupts that need to be cleared are the following: %u.", read_data[0]);
+	
+	// Read out Measurement
+	write_data[0] = 0x20;
+	if(!TOF_READ_WRITE_APP(write_data, 1, s_measurement_buffer[s_measurement_iter], 132, 1) == ESP_OK) return;
+
+	//Set flags for buffers
+	s_measurement_flags &= (1 << s_measurement_iter);
+
+	s_measurement_iter++;
+
+	if(s_measurement_iter >= number_of_measurements)
+	{
+		s_measurement_iter = 0;
+	}
+
+	//Clear pending interrupts
+	write_data[0] = 0xE1;
+	write_data[1] = 0x02;
+	if(TOF_WRITE_APP(write_data, 2, 1) != ESP_OK) return;
+
+	//Queue Message to Process Read Buffer
+
+	ESP_LOGI(TAG, "Read measurement successfully.");
 }
