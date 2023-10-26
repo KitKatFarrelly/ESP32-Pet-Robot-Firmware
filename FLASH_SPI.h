@@ -1,30 +1,37 @@
 #ifndef H_FLASH_DRVR
 #define H_FLASH_DRVR
 
+#define MAX_NUMBER_OF_BLOBS 100
+
 typedef struct
 {
-    const char* name;
+    uint8_t number_of_entries;
+    char blob_names[MAX_NUMBER_OF_BLOBS][16];
     unsigned long size;
-} FLASH_PARTITION_t;
+} PARTITION_INFO_t;
 
-FLASH_PARTITION_t FLASH_CREATE_PARTITION(unsigned long size);
+// NVS STORAGE FUNCTIONS
 
-uint8_t FLASH_DELETE_PARTITION(FLASH_PARTITION_t handle);
+uint8_t FLASH_INIT_PARTITION(const char* partition_name);
 
-void* FLASH_GET_PARTITION_INFO(FLASH_PARTITION_t handle);
+uint8_t FLASH_ERASE_PARTITION(const char* partition_name);
 
-uint8_t FLASH_WRITE_TO_PARTITION(FLASH_PARTITION_t handle, unsigned long offset, void* data, unsigned long size);
+PARTITION_INFO_t FLASH_GET_PARTITION_INFO(const char* partition_name);
 
-void* FLASH_READ_FROM_PARTITION(FLASH_PARTITION_t handle, unsigned long offset, unsigned long size);
+uint8_t FLASH_WRITE_TO_PARTITION(const char* partition_name, const char* blob_name, void* data, unsigned long size);
 
-FLASH_PARTITION_t FLASH_CREATE_FILE(unsigned long size);
+void* FLASH_READ_FROM_PARTITION(const char* partition_name, const char* blob_name, unsigned long size);
 
-uint8_t FLASH_DELETE_FILE(FLASH_PARTITION_t handle);
+// FAT FILESYSTEM FUNCTIONS
 
-void* FLASH_GET_FILE_INFO(FLASH_PARTITION_t handle);
+char* FLASH_CREATE_FILE(const char* partition_name, unsigned long size);
 
-uint8_t FLASH_WRITE_TO_FILE(FLASH_PARTITION_t handle, unsigned long offset, void* data, unsigned long size);
+uint8_t FLASH_DELETE_FILE(const char* partition_name);
 
-void* FLASH_READ_FROM_FILE(FLASH_PARTITION_t handle, unsigned long offset, unsigned long size);
+void* FLASH_GET_FILE_INFO(const char* partition_name);
+
+uint8_t FLASH_WRITE_TO_FILE(const char* partition_name, unsigned long offset, void* data, unsigned long size);
+
+void* FLASH_READ_FROM_FILE(const char* partition_name, unsigned long offset, unsigned long size);
 
 #endif
