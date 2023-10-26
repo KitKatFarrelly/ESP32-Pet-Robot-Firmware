@@ -34,12 +34,43 @@ PARTITION_INFO_t FLASH_GET_PARTITION_INFO(const char* partition_name);
 {
     PARTITION_INFO_t return_info;
 
+    nvs_stats_t = stats_handle;
+    esp_err_t err = nvs_get_stats(partition_name, &stats_handle);
+    if (err != ESP_OK)
+    {
+        return NULL;
+    }
+
+    return_info.number_of_entries = stats_handle.total_entries;
+    return_info.in_use_entries = stats_handle.used_entries;
+    return_info.free_entries = stats_handle.available_entries;
+
     return return_info;
 }
 
-uint8_t FLASH_DOES_KEY_EXIST(const char* partition_name, const char* namespace, const char* blob_name)
+size_t FLASH_DOES_KEY_EXIST(const char* partition_name, const char* namespace, const char* blob_name)
 {
-    return 0;
+    nvs_handle_t does_key_exist_handle;
+    esp_err_t err;
+    
+    err = nvs_open_from_partition(partition_name, namespace, NVS_READONLY, &does_key_exist_handle);
+    if (err != ESP_OK) 
+    {
+        nvs_close(does_key_exist_handle);
+        return 0;
+    }
+
+    // Read the size of memory space required for blob
+    size_t required_size = 0;  // value will default to 0, if not set yet in NVS
+    err = nvs_get_blob(does_key_exist_handle, blob_name, NULL, &required_size);
+    if (err != ESP_OK) 
+    {
+        nvs_close(does_key_exist_handle);
+        return 0;
+    }
+    nvs_close(does_key_exist_handle);
+
+    return required_size;
 }
 
 uint8_t FLASH_WRITE_TO_PARTITION(const char* partition_name, const char* namespace, const char* blob_name, void* data, unsigned long size)
