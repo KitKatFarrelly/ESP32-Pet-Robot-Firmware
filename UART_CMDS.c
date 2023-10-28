@@ -19,8 +19,21 @@ static uint8_t buf[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1];
 // helper functions
 
 static uint8_t uart_get_hex_from_char(char to_convert);
+static dispatcher_type_t uart_get_dispatcher(const char * disp_str);
+static uint8_t uart_convert_str_to_args(const uint8_t * cmd_buf, char** argv_ptr, uint8_t argv_max);
 
-// internal functions
+// usb functions
+
+static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event);
+static void tinyusb_cdc_line_state_changed_callback(int itf, cdcacm_event_t *event);
+
+// uart command lists
+
+static void uart_tof_cmds(uint8_t argc, const char** argv);
+static void uart_flash_cmds(uint8_t argc, const char** argv);
+static void uart_msg_queue_cmds(uint8_t argc, const char** argv);
+
+// function defs
 
 static void uart_tof_cmds(uint8_t argc, const char** argv)
 {
@@ -187,6 +200,8 @@ static dispatcher_type_t uart_get_dispatcher(const char * disp_str)
     }
 }
 
+// Credit to sstteevvee on StackOverflow for this one
+// https://stackoverflow.com/questions/1706551/parse-string-into-argv-argc
 static uint8_t uart_convert_str_to_args(const uint8_t * cmd_buf, char** argv_ptr, uint8_t argv_max)
 {
     uint8_t argc = 0;
@@ -222,7 +237,7 @@ static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event)
     tinyusb_cdcacm_write_queue(itf, buf, rx_size);
     tinyusb_cdcacm_write_flush(itf, 0);
 
-    argc = uart_convert_str_to_args(buf, argv);
+    argc = uart_convert_str_to_args(buf, argv, UART_MAX_ARGS);
 
     if(argc == 0)
     {
