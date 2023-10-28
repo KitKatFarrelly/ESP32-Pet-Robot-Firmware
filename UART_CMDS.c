@@ -10,36 +10,61 @@
 #include "UART_CMDS.h"
 #include "ToF_I2C.h"
 
+#define UART_MAX_ARGS 10
+#define UART_INVALID_CHARACTER 100
+
 static const char *TAG = "USB_UART";
 static uint8_t buf[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1];
 
-static void UART_RUN_CMD(const uint8_t * cmd_buf, size_t cmd_size)
+// helper functions
+
+static uint8_t uart_get_hex_from_char(char to_convert);
+
+// internal functions
+
+static void uart_tof_cmds(uint8_t argc, const char** argv)
 {
-    uint8_t i = 0;
-    if(strncmp((char*) cmd_buf, (const char*) "l", 1) == 0)
+    if(argc < 2)
     {
-        TOF_LOAD_CONFIG(0);
+        ESP_LOGE(TAG, "incorrect number of args");
+        return;
     }
-    else if(strncmp((char*) cmd_buf, (const char*) "o", 1) == 0)
+    if(strcmp((char*) argv[1], (const char*) "load_config") == 0)
+    {
+        uint8_t config_type = 0;
+        if(argc == 3)
+        {
+            config_type = (uint8_t) (argv[2][0] - "0");
+        }
+        TOF_LOAD_CONFIG(config_type);
+    }
+    else if(strcmp((char*) argv[1], (const char*) "reset_tof") == 0)
     {
         TOF_RESET();
     }
-    else if(strncmp((char*) cmd_buf, (const char*) "r", 1) == 0)
+    else if(strcmp((char*) argv[1], (const char*) "read_i2c") == 0)
     {
-        if(cmd_size < 6)
+        if(argc < 4)
         {
             ESP_LOGE(TAG, "Incorrect size args");
             return;
         }
-        uint8_t read_reg = ((cmd_buf[2] - '0') * 16) + (cmd_buf[3] - '0');
+
+        uint8_t read_reg = 0;
+        if((uart_get_hex_from_char(argv[2][0]) == UART_INVALID_CHARACTER) || (uart_get_hex_from_char(argv[2][1]) == UART_INVALID_CHARACTER))
+        {
+            ESP_LOGE(TAG, "invalid read register");
+            return;
+        }
+        read_reg = (uart_get_hex_from_char(argv[2][0]) * 16) + (uart_get_hex_from_char(argv[2][1]));
 
         uint8_t read_bytes = 0;
-        for(i = 5; i < cmd_size; i++)
+        for(uint8_t i = 0; i < strlen(argv[3]); i++)
         {
-            if(cmd_buf[i] >= '0' && cmd_buf[i] <= '9')
+            if(argv[3][i] >= '0' && argv[3][i] <= '9')
             {
                 read_bytes = read_bytes * 10;
-                read_bytes += (cmd_buf[i] - '0');
+                read_bytes += (uint8_t) (argv[3][i] - '0');
             }
         }
         uint8_t* read_data = malloc(read_bytes * sizeof(uint8_t));
@@ -51,27 +76,36 @@ static void UART_RUN_CMD(const uint8_t * cmd_buf, size_t cmd_size)
             ESP_LOGI(TAG, "%x", read_data[i]);
         }
     }
-    else if(strncmp((char*) cmd_buf, (const char*) "w", 1) == 0)
+    else if(strcmp((char*) argv[1], (const char*) "write_i2c") == 0)
     {
         uint8_t write_cnt = 0;
-        uint8_t write_bytes[20] = {0};
-        bool is_lsb = false;
-        for(i = 1; i < cmd_size; i++)
+        uint8_t write_bytes[UART_MAX_ARGS - 2] = {0};
+
+        if(argc < 3)
         {
-            if(cmd_buf[i] >= '0' && cmd_buf[i] <= '9')
+            ESP_LOGE(TAG, "Incorrect size args");
+            return;
+        }
+
+        for(uint8_t i = 2; (i < argc) && (i < UART_MAX_ARGS); i++)
+        {
+            if(uart_get_hex_from_char(argv[i][0]) == UART_INVALID_CHARACTER)
             {
-                if(is_lsb)
-                {
-                    write_bytes[write_cnt] += ((cmd_buf[i] - '0'));
-                    is_lsb = false;
-                    write_cnt++;
-                }
-                else
-                {
-                    write_bytes[write_cnt] = ((cmd_buf[i] - '0') * 16);
-                    is_lsb = true;
-                }
+                ESP_LOGE(TAG, "invalid write at byte %u", );
+                return;
             }
+
+            write_bytes[write_cnt] = (uart_get_hex_from_char(argv[2][0]) * 16);
+
+            if(uart_get_hex_from_char(argv[i][1]) == UART_INVALID_CHARACTER)
+            {
+                ESP_LOGE(TAG, "invalid write at byte %u", );
+                return;
+            }
+
+            write_bytes[write_cnt] += uart_get_hex_from_char(argv[2][1])
+
+            write_cnt++;
         }
         write_bytes[write_cnt] = 0;
         ESP_LOGI(TAG, "Writing %d bytes to register 0x%x: ", write_cnt, write_bytes[0]);
@@ -83,10 +117,97 @@ static void UART_RUN_CMD(const uint8_t * cmd_buf, size_t cmd_size)
     }
 }
 
+static void uart_flash_cmds(uint8_t argc, const char** argv)
+{
+    //Implement Flash Commands
+}
+
+static void uart_msg_queue_cmds(uint8_t argc, const char** argv)
+{
+    //Implement Message Queue Commands
+}
+
+static uint8_t uart_get_hex_from_char(char to_convert)
+{
+    if(to_convert >= '0' && to_convert <= '9')
+    {
+        return (uint8_t) (to_convert - '0');
+    }
+    else if(to_convert >= 'a' && to_convert <= 'f')
+    {
+        return (uint8_t) (to_convert - 'a' + 10);
+    }
+    else if(to_convert >= 'A' && to_convert <= 'F')
+    {
+        return (uint8_t) (to_convert - 'A' + 10);
+    }
+    else
+    {
+        return UART_INVALID_CHARACTER;
+    }
+}
+
+static dispatcher_type_t uart_get_dispatcher(const char * disp_str)
+{
+    if(disp_str == NULL)
+    {
+        return error;
+    }
+    else if(strcmp((char*) cmd_buf, (const char*) "flash") == 0)
+    {
+        return flash;
+    }
+    else if(strcmp((char*) cmd_buf, (const char*) "msg_queue") == 0)
+    {
+        return msg_queue;
+    }
+    else if(strcmp((char*) cmd_buf, (const char*) "tof") == 0)
+    {
+        return tof;
+    }
+    else if(strcmp((char*) cmd_buf, (const char*) "imu") == 0)
+    {
+        return imu;
+    }
+    else if(strcmp((char*) cmd_buf, (const char*) "motor") == 0)
+    {
+        return motor;
+    }
+    else if(strcmp((char*) cmd_buf, (const char*) "led") == 0)
+    {
+        return led;
+    }
+    else if(strcmp((char*) cmd_buf, (const char*) "mesh") == 0)
+    {
+        return mesh;
+    }
+    else
+    {
+        return not_specified;
+    }
+}
+
+static uint8_t uart_convert_str_to_args(const uint8_t * cmd_buf, char** argv_ptr, uint8_t argv_max)
+{
+    uint8_t argc = 0;
+
+    char *p2 = strtok((char *)cmd_buf, " ");
+    while (p2 && argc < argv_max-1)
+    {
+        argv_ptr[argc++] = p2;
+        p2 = strtok(0, " ");
+    }
+    argv_ptr[argc] = 0;
+
+    return argc;
+}
+
 static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event)
 {
     /* initialization */
     size_t rx_size = 0;
+    char *argv[UART_MAX_ARGS] = {0};
+    uint8_t argc = 0;
 
     /* read */
     esp_err_t ret = tinyusb_cdcacm_read(itf, buf, CONFIG_TINYUSB_CDC_RX_BUFSIZE, &rx_size);
@@ -101,7 +222,57 @@ static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event)
     tinyusb_cdcacm_write_queue(itf, buf, rx_size);
     tinyusb_cdcacm_write_flush(itf, 0);
 
-    UART_RUN_CMD(buf, rx_size);
+    argc = uart_convert_str_to_args(buf, argv);
+
+    if(argc == 0)
+    {
+        ESP_LOGE(TAG, "no dispatcher specified");
+        return;
+    }
+
+    switch(uart_get_dispatcher(argv[0]))
+    {
+        case flash:
+        {
+            uart_flash_cmds(argc, argv);
+            break;
+        }
+        case msg_queue:
+        {
+            uart_msg_queue_cmds(argc, argv)
+            break;
+        }
+        case tof:
+        {
+            uart_tof_cmds(argc, argv);
+            break;
+        }
+        case imu:
+        {
+            ESP_LOGI(TAG, "IMU commands not implemented");
+            break;
+        }
+        case motor:
+        {
+            ESP_LOGI(TAG, "Motor commands not implemented");
+            break;
+        }
+        case led:
+        {
+            ESP_LOGI(TAG, "LED commands not implemented");
+            break;
+        }
+        case mesh:
+        {
+            ESP_LOGI(TAG, "Mesh commands not implemented");
+            break;
+        }
+        default:
+        {
+            ESP_LOGI(TAG, "invalid specifier");
+            break;
+        }
+    }
 }
 
 static void tinyusb_cdc_line_state_changed_callback(int itf, cdcacm_event_t *event)
