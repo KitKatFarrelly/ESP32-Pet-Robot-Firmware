@@ -20,9 +20,9 @@ PARTITION_INFO_t FLASH_GET_PARTITION_INFO(const char* partition_name);
 
 size_t FLASH_DOES_KEY_EXIST(const char* partition_name, const char* namespace, const char* blob_name);
 
-uint8_t FLASH_WRITE_TO_PARTITION(const char* partition_name, const char* namespace, const char* blob_name, void* data, unsigned long size);
+uint8_t FLASH_WRITE_TO_PARTITION(const char* partition_name, const char* namespace, const char* blob_name, void* data, size_t size);
 
-void* FLASH_READ_FROM_PARTITION(const char* partition_name, const char* namespace, const char* blob_name, unsigned long size);
+void* FLASH_READ_FROM_PARTITION(const char* partition_name, const char* namespace, const char* blob_name, size_t size);
 
 // FAT FILESYSTEM FUNCTIONS
 
