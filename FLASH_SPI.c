@@ -2,19 +2,26 @@
 #include <inttypes.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_log.h"
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 
 #include "FLASH_SPI.h"
 
+// log tag
+
+static const char *TAG = "FLASH";
+
 uint8_t FLASH_INIT_PARTITION(const char* partition_name)
 {
     esp_err_t err = nvs_flash_init_partition(partition_name);
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
+        ESP_LOGE(TAG, "Failed to initialize partition %s.", partition_name);
         return 1;
     }
+    ESP_LOGI(TAG, "Partition %s Initialized.", partition_name);
 
     return 0;
 }
@@ -57,6 +64,7 @@ size_t FLASH_DOES_KEY_EXIST(const char* partition_name, const char* namespace, c
     if (err != ESP_OK) 
     {
         nvs_close(does_key_exist_handle);
+        ESP_LOGE(TAG, "unable to open partition.");
         return 0;
     }
 
@@ -66,6 +74,7 @@ size_t FLASH_DOES_KEY_EXIST(const char* partition_name, const char* namespace, c
     if (err != ESP_OK) 
     {
         nvs_close(does_key_exist_handle);
+        ESP_LOGE(TAG, "key not found.");
         return 0;
     }
     nvs_close(does_key_exist_handle);
@@ -73,7 +82,7 @@ size_t FLASH_DOES_KEY_EXIST(const char* partition_name, const char* namespace, c
     return required_size;
 }
 
-uint8_t FLASH_WRITE_TO_PARTITION(const char* partition_name, const char* namespace, const char* blob_name, void* data, size_t size)
+uint8_t FLASH_WRITE_TO_BLOB(const char* partition_name, const char* namespace, const char* blob_name, void* data, size_t size)
 {
     nvs_handle_t write_handle;
     esp_err_t err;
@@ -82,6 +91,7 @@ uint8_t FLASH_WRITE_TO_PARTITION(const char* partition_name, const char* namespa
     if (err != ESP_OK) 
     {
         nvs_close(write_handle);
+        ESP_LOGE(TAG, "unable to open partition.");
         return 1;
     }
 
@@ -90,13 +100,14 @@ uint8_t FLASH_WRITE_TO_PARTITION(const char* partition_name, const char* namespa
     if (err != ESP_OK) 
     {
         nvs_close(write_handle);
+        ESP_LOGE(TAG, "could not write to blob.");
         return 1;
     }
     nvs_close(write_handle);
     return 0;
 }
 
-void* FLASH_READ_FROM_PARTITION(const char* partition_name, const char* namespace, const char* blob_name, size_t size)
+void* FLASH_READ_FROM_BLOB(const char* partition_name, const char* namespace, const char* blob_name, size_t size)
 {
     nvs_handle_t read_handle;
     esp_err_t err;
@@ -106,6 +117,7 @@ void* FLASH_READ_FROM_PARTITION(const char* partition_name, const char* namespac
     if (err != ESP_OK) 
     {
         nvs_close(read_handle);
+        ESP_LOGE(TAG, "unable to open partition.");
         return NULL;
     }
 
@@ -114,6 +126,7 @@ void* FLASH_READ_FROM_PARTITION(const char* partition_name, const char* namespac
     if (err != ESP_OK) 
     {
         nvs_close(read_handle);
+        ESP_LOGE(TAG, "could not read from blob.");
         return NULL;
     }
     nvs_close(read_handle);

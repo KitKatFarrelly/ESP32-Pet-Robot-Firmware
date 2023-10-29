@@ -29,6 +29,12 @@
 
 #define FW_HEADER_LEN 4
 
+#define tmf8821_fac_cal		"tmf8821_fac"
+#define tmf8828_fac_cal_1	"tmf8828_fac_1"
+#define tmf8828_fac_cal_2	"tmf8828_fac_2"
+#define tmf8828_fac_cal_3	"tmf8828_fac_3"
+#define tmf8828_fac_cal_4	"tmf8828_fac_4"
+
 //Commands
 
 static uint8_t DOWNLOAD_INIT[5] = {0x08, 0x14, 0x01, 0x29, 0xC1};
@@ -51,6 +57,7 @@ static uint8_t TOF_WAIT_UNTIL_READY_APP(uint8_t delay_between_attempts);
 static uint8_t TOF_CHECK_REGISTERS(uint8_t* read_reg, uint8_t* comp_reg, uint8_t size);
 static esp_err_t TOF_READ_WRITE_APP(uint8_t* TOF_OUT, uint8_t out_dat_size, uint8_t* TOF_IN, uint8_t in_dat_size, uint8_t wait_ms);
 static esp_err_t TOF_WRITE_APP(uint8_t* TOF_IN, uint8_t dat_size, uint8_t wait_ms);
+static uint8_t TOF_SET_FACTORY_CAL_BLOB_NAME(uint8_t iter, char* blob_name);
 
 // Internal Variables
 
@@ -60,6 +67,7 @@ static uint8_t s_ring_buffer_size = 0;
 static uint8_t s_measurement_iter = 0;
 static uint8_t s_measurement_buffer[4][132] = {0};
 static uint8_t s_measurement_flags = 0;
+static uint8_t s_current_config = 0;
 
 // Interrupt Handler
 
@@ -126,6 +134,7 @@ void TOF_INIT(void)
 	s_ring_buffer_size = 0;
 	s_measurement_iter = 0;
 	s_measurement_flags = 0;
+	s_current_config = 0;
 	
 	if(!TOF_FIRMWARE_CHECK())
 	{
@@ -207,6 +216,8 @@ uint8_t TOF_LOAD_CONFIG(uint8_t config)
 	write_data[1] = 0xFF;
 	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
 
+	s_current_config = config;
+
 	//Return if successful
 	return 0;
 }
@@ -254,6 +265,8 @@ uint8_t TOF_STORE_FACTORY_CALIBRATION(void)
 	uint8_t number_of_factory_calibrations = (s_is_tmf8828_mode) ? 4 : 1;
 	uint8_t write_data[2] = {0, 0};
 	uint8_t read_data[64] = {0};
+	uint8_t factory_cal_blob[0xC0];
+	char fac_cal_blob_name[20] = {0};
 
 	// Steps:
 	
@@ -264,6 +277,9 @@ uint8_t TOF_STORE_FACTORY_CALIBRATION(void)
 
 	for(int i = 0; i < number_of_factory_calibrations; i++)
 	{
+		//determine blob name
+		if(TOF_SET_FACTORY_CAL_BLOB_NAME(i, fac_cal_blob_name)) return 1;
+		
 		// Load Factory Calibration Page
 		write_data[0] = 0x08;
 		write_data[1] = 0x19;
@@ -276,15 +292,17 @@ uint8_t TOF_STORE_FACTORY_CALIBRATION(void)
 		for(int j = 0; j < 3; j++)
 		{
 			write_data[0] = 0x20 + (j * 0x40);
-			if(TOF_READ_WRITE_APP(write_data, 1, read_data, 64, 5) == ESP_OK)
+			if(TOF_READ_WRITE_APP(write_data, 1, read_data, 0x40, 5) == ESP_OK)
 			{
-				//Append Read data to factory calibration storage in SPI
+				memcpy(&factory_cal_blob[j * 0x40], read_data, 0x40);
 			}
 			else
 			{
 				return 1;
 			}
 		}
+
+		if(FLASH_WRITE_TO_BLOB(MAIN_PARTITION, "tof", fac_cal_blob_name, factory_cal_blob, 0xC0)) return 1;
 
 		if(i < number_of_factory_calibrations - 1)
 		{
@@ -306,7 +324,8 @@ uint8_t TOF_LOAD_FACTORY_CALIBRATION(void)
 	uint8_t number_of_factory_calibrations = (s_is_tmf8828_mode) ? 4 : 1;
 	uint8_t write_data[65] = {0};
 	uint8_t factory_counter = 0;
-	uint8_t* factory_calibration;
+	uint8_t factory_calibration[0xC0];
+	char fac_cal_blob_name[20] = {0};
 
 	// Steps:
 	
@@ -317,6 +336,9 @@ uint8_t TOF_LOAD_FACTORY_CALIBRATION(void)
 
 	for(int i = 0; i < number_of_factory_calibrations; i++)
 	{
+		//determine blob name
+		if(TOF_SET_FACTORY_CAL_BLOB_NAME(i, fac_cal_blob_name)) return 1;
+		
 		// Load Factory Calibration Page
 		write_data[0] = 0x08;
 		write_data[1] = 0x19;
@@ -326,7 +348,13 @@ uint8_t TOF_LOAD_FACTORY_CALIBRATION(void)
 		if(TOF_WAIT_UNTIL_READY_APP(3)) return 1;
 
 		// Get Factory Calibration from memory
-		factory_calibration = NULL; //Need to get pointer from SPI memory API
+
+		if(FLASH_DOES_KEY_EXIST(MAIN_PARTITION, "tof", fac_cal_blob_name) != 0xC0) return 1;
+
+		//Need to get pointer from SPI memory API
+		factory_calibration = FLASH_READ_FROM_BLOB(MAIN_PARTITION, "tof", fac_cal_blob_name, 0xC0);
+
+		if(factory_calibration == NULL) return 1;
 		
 		// write factory calibration to memory
 		while(factory_counter < 0xC0)
@@ -341,6 +369,9 @@ uint8_t TOF_LOAD_FACTORY_CALIBRATION(void)
 			if(TOF_WRITE_APP(write_data, dat_size + 1, 5) != ESP_OK) return 1;
 			factory_counter += dat_size;
 		}
+
+		// Free memory that held factory calibration
+		free(factory_calibration);
 
 		// Write Page Config to go to next Calibration
 		write_data[0] = 0x08;
@@ -415,6 +446,67 @@ esp_err_t TOF_READ_WRITE(uint8_t* TOF_OUT, uint8_t out_dat_size, uint8_t* TOF_IN
 esp_err_t TOF_WRITE(uint8_t* TOF_IN, uint8_t dat_size)
 {
 	return i2c_master_write_to_device(I2C_MASTER_NUM, TOF_SENSOR_ADDR, TOF_IN, dat_size, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+}
+
+static uint8_t TOF_SET_FACTORY_CAL_BLOB_NAME(uint8_t iter, char* blob_name)
+{
+	size_t fac_cal_strlen = 0;
+	switch(iter)
+	{
+		case 0:
+		{
+			if(number_of_factory_calibrations > 1)
+			{
+				fac_cal_strlen = strlen(tmf8828_fac_cal_1);
+				memcpy(blob_name, tmf8828_fac_cal_1, fac_cal_strlen);
+				blob_name[fac_cal_strlen] = '_';
+				blob_name[fac_cal_strlen] = (s_current_config + '0');
+				blob_name[fac_cal_strlen] = '\0';
+				return 0;
+			}
+			else
+			{
+				fac_cal_strlen = strlen(tmf8821_fac_cal);
+				memcpy(blob_name, tmf8821_fac_cal, fac_cal_strlen);
+				blob_name[fac_cal_strlen] = '_';
+				blob_name[fac_cal_strlen] = (s_current_config + '0');
+				blob_name[fac_cal_strlen] = '\0';
+				return 0;
+			}
+		}
+		case 1:
+		{
+			fac_cal_strlen = strlen(tmf8828_fac_cal_2);
+			memcpy(blob_name, tmf8828_fac_cal_2, fac_cal_strlen);
+			blob_name[fac_cal_strlen] = '_';
+			blob_name[fac_cal_strlen] = (s_current_config + '0');
+			blob_name[fac_cal_strlen] = '\0';
+			return 0;
+		}
+		case 2:
+		{
+			fac_cal_strlen = strlen(tmf8828_fac_cal_3);
+			memcpy(blob_name, tmf8828_fac_cal_3, fac_cal_strlen);
+			blob_name[fac_cal_strlen] = '_';
+			blob_name[fac_cal_strlen] = (s_current_config + '0');
+			blob_name[fac_cal_strlen] = '\0';
+			return 0;
+		}
+		case 3:
+		{
+			fac_cal_strlen = strlen(tmf8828_fac_cal_3);
+			memcpy(blob_name, tmf8828_fac_cal_3, fac_cal_strlen);
+			blob_name[fac_cal_strlen] = '_';
+			blob_name[fac_cal_strlen] = (s_current_config + '0');
+			blob_name[fac_cal_strlen] = '\0';
+			return 0;
+		}
+		default:
+		{
+			ESP_LOGE(TAG, "Storing invalid number of calibrations, exiting");
+			return 1;
+		}
+	}
 }
 
 static uint8_t TOF_FIRMWARE_CHECK(void)
