@@ -90,6 +90,7 @@ static void uart_tof_cmds(uint8_t argc, const char** argv)
         {
             ESP_LOGI(TAG, "%x", read_data[i]);
         }
+        free(read_data);
     }
     else if(strcmp((char*) argv[1], (const char*) "write_i2c") == 0)
     {
@@ -122,7 +123,10 @@ static void uart_tof_cmds(uint8_t argc, const char** argv)
 
             write_cnt++;
         }
-        write_bytes[write_cnt] = 0;
+        if(i < UART_MAX_ARGS)
+        {
+            write_bytes[write_cnt] = 0;
+        }
         ESP_LOGI(TAG, "Writing %d bytes to register 0x%x: ", write_cnt, write_bytes[0]);
         for(i = 0; i < write_cnt; i++)
         {
@@ -141,19 +145,65 @@ static void uart_flash_cmds(uint8_t argc, const char** argv)
     }
     if(strcmp((char*) argv[1], (const char*) "write_flash") == 0)
     {
-        if(argc < 3)
+        uint8_t write_cnt = 0;
+        uint8_t write_bytes[UART_MAX_ARGS - 2] = {0};
+        if(argc < 4)
         {
             ESP_LOGE(TAG, "Incorrect size args");
             return;
         }
+        for(uint8_t i = 3; (i < argc) && (i < UART_MAX_ARGS); i++)
+        {
+            if(uart_get_hex_from_char(argv[i][0]) == UART_INVALID_CHARACTER)
+            {
+                ESP_LOGE(TAG, "invalid write at byte %u", i);
+                return;
+            }
+
+            write_bytes[write_cnt] = (uart_get_hex_from_char(argv[2][0]) * 16);
+
+            if(uart_get_hex_from_char(argv[i][1]) == UART_INVALID_CHARACTER)
+            {
+                ESP_LOGE(TAG, "invalid write at byte %u", i);
+                return;
+            }
+
+            write_bytes[write_cnt] += uart_get_hex_from_char(argv[2][1])
+
+            write_cnt++;
+        }
+        if(i < UART_MAX_ARGS)
+        {
+            write_bytes[write_cnt] = 0;
+        }
+        ESP_LOGI(TAG, "Writing %d bytes to key %s: ", write_cnt, argv[2]);
+        FLASH_WRITE_TO_BLOB("factory", "flash", argv[2], write_bytes, write_cnt);
     }
     else if(strcmp((char*) argv[1], (const char*) "read_flash") == 0)
     {
-        if(argc < 3)
+        if(argc < 4)
         {
             ESP_LOGE(TAG, "Incorrect size args");
             return;
         }
+
+        uint8_t read_bytes = 0;
+        for(uint8_t i = 0; i < strlen(argv[3]); i++)
+        {
+            if(argv[3][i] >= '0' && argv[3][i] <= '9')
+            {
+                read_bytes = read_bytes * 10;
+                read_bytes += (uint8_t) (argv[3][i] - '0');
+            }
+        }
+        ESP_LOGI(TAG, "Reading %d bytes from key %s", read_bytes, read_reg);
+        uint8_t* read_data = FLASH_READ_FROM_BLOB("factory", "flash", argv[2], read_bytes);
+        ESP_LOGI(TAG, "Read the following bytes: ");
+        for(i = 0; i < read_bytes; i++)
+        {
+            ESP_LOGI(TAG, "%x", read_data[i]);
+        }
+        free(read_data);
     }
     else if(strcmp((char*) argv[1], (const char*) "clear_partition") == 0)
     {
