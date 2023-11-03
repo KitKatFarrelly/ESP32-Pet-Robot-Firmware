@@ -106,7 +106,7 @@ static void uart_tof_cmds(uint8_t argc, const char** argv)
         {
             if(uart_get_hex_from_char(argv[i][0]) == UART_INVALID_CHARACTER)
             {
-                ESP_LOGE(TAG, "invalid write at byte %u", );
+                ESP_LOGE(TAG, "invalid write at byte %u", i);
                 return;
             }
 
@@ -114,7 +114,7 @@ static void uart_tof_cmds(uint8_t argc, const char** argv)
 
             if(uart_get_hex_from_char(argv[i][1]) == UART_INVALID_CHARACTER)
             {
-                ESP_LOGE(TAG, "invalid write at byte %u", );
+                ESP_LOGE(TAG, "invalid write at byte %u", i);
                 return;
             }
 
@@ -134,7 +134,92 @@ static void uart_tof_cmds(uint8_t argc, const char** argv)
 
 static void uart_flash_cmds(uint8_t argc, const char** argv)
 {
-    //Implement Flash Commands
+    if(argc < 2)
+    {
+        ESP_LOGE(TAG, "incorrect number of args");
+        return;
+    }
+    if(strcmp((char*) argv[1], (const char*) "write_flash") == 0)
+    {
+        if(argc < 3)
+        {
+            ESP_LOGE(TAG, "Incorrect size args");
+            return;
+        }
+    }
+    else if(strcmp((char*) argv[1], (const char*) "read_flash") == 0)
+    {
+        if(argc < 3)
+        {
+            ESP_LOGE(TAG, "Incorrect size args");
+            return;
+        }
+    }
+    else if(strcmp((char*) argv[1], (const char*) "clear_partition") == 0)
+    {
+        uint8_t error_code = 0;
+        if(argc < 3)
+        {
+            error_code = FLASH_ERASE_PARTITION(MAIN_PARTITION);
+        }
+        else
+        {
+            error_code = FLASH_ERASE_PARTITION(argv[2]);
+        }
+        ESP_LOGI(TAG, "cleared partition with error %u", error_code);
+    }
+    else if(strcmp((char*) argv[1], (const char*) "partition_info") == 0)
+    {
+        PARTITION_INFO_t partition_info;
+        if(argc < 3)
+        {
+            partition_info = FLASH_GET_PARTITION_INFO(MAIN_PARTITION);
+            ESP_LOGI(TAG, "info for default partition:");
+        }
+        else
+        {
+            partition_info = FLASH_GET_PARTITION_INFO(argv[2]);
+            ESP_LOGI(TAG, "info for %s partition:", argv[2]);
+        }
+        if(partition_info == NULL)
+        {
+            ESP_LOGE(TAG, "failed to retrieve info!");
+            return;
+        }
+        ESP_LOGI(TAG, "number of entries %zu", partition_info.number_of_entries);
+        ESP_LOGI(TAG, "in use entries entries %zu", partition_info.in_use_entries);
+        ESP_LOGI(TAG, "free entries %zu", partition_info.free_entries);
+    }
+    else if(strcmp((char*) argv[1], (const char*) "find_key") == 0)
+    {
+        size_t key_size = 0;
+        if(argc < 3)
+        {
+            ESP_LOGE(TAG, "Incorrect size args");
+            return;
+        }
+        if(argc < 4)
+        {
+            key_size = FLASH_DOES_KEY_EXIST(MAIN_PARTITION, "flash", argv[2]);
+            ESP_LOGI(TAG, "info for %s key in default namespace in default partition:", argv[2]);
+        }
+        else if(argc < 5)
+        {
+            key_size = FLASH_DOES_KEY_EXIST(argv[2], "flash", argv[3]);
+            ESP_LOGI(TAG, "info for %s key in default namespace in %s partition:", argv[3], argv[2]);
+        }
+        else
+        {
+            key_size = FLASH_DOES_KEY_EXIST(argv[2], argv[3], argv[4]);
+            ESP_LOGI(TAG, "info for %s key in %s namespace in %s partition:", argv[4], argv[3], argv[2]);
+        }
+        if(key_size == 0)
+        {
+            ESP_LOGE(TAG, "failed to retrieve key data!");
+            return;
+        }
+        ESP_LOGI(TAG, "key exists with size %zu", key_size);
+    }
 }
 
 static void uart_msg_queue_cmds(uint8_t argc, const char** argv)

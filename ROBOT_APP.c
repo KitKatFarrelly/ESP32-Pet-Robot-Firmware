@@ -16,6 +16,7 @@
 #include "ToF_I2C.h"
 #include "MTR_DRVR.h"
 #include "UART_CMDS.h"
+#include "FLASH_SPI.h"
 
 static const char *TAG = "APP LOG";
 
@@ -34,6 +35,8 @@ void app_main(void)
     //GPIO Setup
 	
 	//TODO - Move
+
+	gpio_install_isr_service(0);
 	
 	//POWER INDICATOR INPUTS
 	
@@ -57,6 +60,9 @@ void app_main(void)
     //enable pull-up mode
     io_conf.pull_up_en = 0;
     gpio_config(&io_conf);
+
+	//Init main nvs partition
+	FLASH_INIT_PARTITION(MAIN_PARTITION);
 
 	UART_INIT();
 	
