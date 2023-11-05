@@ -20,6 +20,8 @@ void PRIORITY_MESSAGE_QUEUE_INIT(void);
 
 bool check_is_queue_active(uint8_t queuetype);
 
+uint8_t clear_all_handles(void);
+
 uint8_t create_handle_for_component(component_handle_t* handle);
 
 uint8_t delete_handle_for_component(component_handle_t handle);
