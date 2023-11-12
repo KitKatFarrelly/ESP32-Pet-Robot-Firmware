@@ -25,8 +25,8 @@ typedef struct
 
 static const char *TAG = "MSG_QUEUE";
 
-static void normal_queue_loop();
-static void priority_queue_loop();
+static void normal_queue_loop(void* args);
+static void priority_queue_loop(void* args);
 static bool is_handle_registered(component_handle_t handle);
 
 static bool normal_queue_active = false;
@@ -142,7 +142,7 @@ uint8_t delete_handle_for_component(component_handle_t handle)
     queue_handle_cnt--;
 }
 
-callback_handle_t register_component_handler_for_messages(void (*func_ptr)(uint8_t), component_handle_t handle)
+callback_handle_t register_component_handler_for_messages(void (*func_ptr)(uint8_t, void*), component_handle_t handle)
 {
     callback_handle_t return_handle = 0;
     if(normal_queue_handlers[handle].is_component_registered && normal_queue_active)
@@ -208,12 +208,14 @@ uint8_t unregister_component_handler_for_messages(component_handle_t handle, cal
     return 1;
 }
 
-uint8_t send_message_to_normal_queue(message_info_t message_info)
+uint8_t send_message_to_normal_queue(message_info_t* message_info)
 {
-
+    if(!normal_queue_active) return 1;
+    xQueueSend(normal_message_queue, message_info, NULL);
+    return 0;
 }
 
-callback_handle_t register_priority_handler_for_messages(void (*func_ptr)(uint8_t), component_handle_t handle)
+callback_handle_t register_priority_handler_for_messages(void (*func_ptr)(uint8_t, void*), component_handle_t handle)
 {
     callback_handle_t return_handle = 0;
     if(priority_queue_handlers[handle].is_component_registered && priority_queue_active)
@@ -279,22 +281,58 @@ uint8_t unregister_priority_handler_for_messages(component_handle_t handle, call
     return 1;
 }
 
-uint8_t send_message_to_priority_queue(message_info_t message_info)
+uint8_t send_message_to_priority_queue(message_info_t* message_info)
 {
-
+    if(!priority_queue_active) return 1;
+    xQueueSend(priority_message_queue, message_info, NULL);
+    return 0;
 }
 
-static void normal_queue_loop()
+static void normal_queue_loop(void* args)
 {
-
+    message_info_t message_info;
+    while(normal_queue_active)
+    {
+        if (xQueueReceive(normal_message_queue, &message_info, portMAX_DELAY))
+        {
+            component_handler_t component_handler = normal_queue_handlers[message_info->component_handle];
+            callback_handler_t* callback_iter = NULL;
+            if(component_handler.is_component_registered)
+            {
+                callback_iter = component_handler.callback_list_start;
+            }
+            while(callback_iter != NULL)
+            {
+                (*(callback_iter->callback_ptr))(message_info->message_type, message_info->message_data);
+                callback_iter = callback_iter->next_handler;
+            }
+        }
+    }
 }
 
-static void priority_queue_loop()
+static void priority_queue_loop(void* args)
 {
-
+    message_info_t message_info;
+    while(priority_queue_active)
+    {
+        if (xQueueReceive(priority_message_queue, &message_info, portMAX_DELAY))
+        {
+            component_handler_t component_handler = priority_queue_handlers[message_info->component_handle];
+            callback_handler_t* callback_iter = NULL;
+            if(component_handler.is_component_registered)
+            {
+                callback_iter = component_handler.callback_list_start;
+            }
+            while(callback_iter != NULL)
+            {
+                (*(callback_iter->callback_ptr))(message_info->message_type, message_info->message_data);
+                callback_iter = callback_iter->next_handler;
+            }
+        }
+    }
 }
 
 static bool is_handle_registered(component_handle_t handle)
 {
-
+    return (normal_queue_handlers[handle].is_component_registered || priority_queue_handlers[handle].is_component_registered);
 }
