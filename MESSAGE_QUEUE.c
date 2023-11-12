@@ -30,7 +30,7 @@ static void priority_queue_loop();
 static bool is_handle_registered(component_handle_t handle);
 
 static bool normal_queue_active = false;
-static bool priority_queue_active = true;
+static bool priority_queue_active = false;
 
 static uint8_t queue_handle_cnt = 0;
 static uint8_t lowest_unregistered_queue_handle = 0;
@@ -144,12 +144,68 @@ uint8_t delete_handle_for_component(component_handle_t handle)
 
 callback_handle_t register_component_handler_for_messages(void (*func_ptr)(uint8_t), component_handle_t handle)
 {
-
+    callback_handle_t return_handle = 0;
+    if(normal_queue_handlers[handle].is_component_registered && normal_queue_active)
+    {
+        callback_handler_t* new_handler = malloc(sizeof(callback_handler_t));
+        callback_handler_t* handler_iter = normal_queue_handlers[handle].callback_list_start;
+        if(handler_iter == NULL)
+        {
+            normal_queue_handlers[handle].callback_list_start = new_handler;
+            return_handle = 1;
+        }
+        else
+        {
+            callback_handler_t* prev_handler_iter = NULL;
+            while((handler_iter) != NULL)
+            {
+                return_handle = handler_iter->callback_handle;
+                prev_handler_iter = handler_iter;
+                handler_iter = handler_iter->next_handler;
+            }
+            if(prev_handler_iter == NULL)
+            {
+                //should maybe panic here but I'm just going to return failure for now
+                free(new_handler);
+                return 0;
+            }
+            prev_handler_iter->next_handler = new_handler;
+            return_handle++;
+        }
+        new_handler->callback_handle = return_handle;
+        new_handler->callback_ptr = func_ptr;
+        new_handler->next_handler = NULL;
+    }
+    return return_handle;
 }
 
 uint8_t unregister_component_handler_for_messages(component_handle_t handle, callback_handle_t function_handle)
 {
-
+    callback_handler_t* handler_iter = normal_queue_handlers[handle].callback_list_start;
+    callback_handler_t* prev_handler_iter = NULL;
+    if(handler_iter == NULL || !normal_queue_active) return 1;
+    while(handler_iter != NULL)
+    {
+        if(handler_iter->callback_handle == function_handle)
+        {
+            if(handler_iter->next_handler != NULL)
+            {
+                if(prev_handler_iter != NULL)
+                {
+                    prev_handler_iter->next_handler = handler_iter->next_handler;
+                }
+                else
+                {
+                    normal_queue_handlers[handle].callback_list_start = handler_iter->next_handler;
+                }
+            }
+            free(handler_iter);
+            return 0;
+        }
+        prev_handler_iter = handler_iter;
+        handler_iter = handler_iter->next_handler;
+    }
+    return 1;
 }
 
 uint8_t send_message_to_normal_queue(message_info_t message_info)
@@ -159,12 +215,68 @@ uint8_t send_message_to_normal_queue(message_info_t message_info)
 
 callback_handle_t register_priority_handler_for_messages(void (*func_ptr)(uint8_t), component_handle_t handle)
 {
-
+    callback_handle_t return_handle = 0;
+    if(priority_queue_handlers[handle].is_component_registered && priority_queue_active)
+    {
+        callback_handler_t* new_handler = malloc(sizeof(callback_handler_t));
+        callback_handler_t* handler_iter = priority_queue_handlers[handle].callback_list_start;
+        if(handler_iter == NULL)
+        {
+            priority_queue_handlers[handle].callback_list_start = new_handler;
+            return_handle = 1;
+        }
+        else
+        {
+            callback_handler_t* prev_handler_iter = NULL;
+            while((handler_iter) != NULL)
+            {
+                return_handle = handler_iter->callback_handle;
+                prev_handler_iter = handler_iter;
+                handler_iter = handler_iter->next_handler;
+            }
+            if(prev_handler_iter == NULL)
+            {
+                //should maybe panic here but I'm just going to return failure for now
+                free(new_handler);
+                return 0;
+            }
+            prev_handler_iter->next_handler = new_handler;
+            return_handle++;
+        }
+        new_handler->callback_handle = return_handle;
+        new_handler->callback_ptr = func_ptr;
+        new_handler->next_handler = NULL;
+    }
+    return return_handle;
 }
 
 uint8_t unregister_priority_handler_for_messages(component_handle_t handle, callback_handle_t function_handle)
 {
-
+    callback_handler_t* handler_iter = priority_queue_handlers[handle].callback_list_start;
+    callback_handler_t* prev_handler_iter = NULL;
+    if(handler_iter == NULL || !priority_queue_active) return 1;
+    while(handler_iter != NULL)
+    {
+        if(handler_iter->callback_handle == function_handle)
+        {
+            if(handler_iter->next_handler != NULL)
+            {
+                if(prev_handler_iter != NULL)
+                {
+                    prev_handler_iter->next_handler = handler_iter->next_handler;
+                }
+                else
+                {
+                    priority_queue_handlers[handle].callback_list_start = handler_iter->next_handler;
+                }
+            }
+            free(handler_iter);
+            return 0;
+        }
+        prev_handler_iter = handler_iter;
+        handler_iter = handler_iter->next_handler;
+    }
+    return 1;
 }
 
 uint8_t send_message_to_priority_queue(message_info_t message_info)
