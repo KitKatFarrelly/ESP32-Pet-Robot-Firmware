@@ -72,7 +72,10 @@ uint8_t clear_all_handles(void)
 {
     for(int i = 0; i < queue_handle_cnt; i++)
     {
-        delete_handle_for_component((component_handle_t) i);
+        if(delete_handle_for_component((component_handle_t) i))
+        {
+            return 1;
+        }
     }
     queue_handle_cnt = 0;
     lowest_unregistered_queue_handle = 0;
@@ -116,6 +119,10 @@ uint8_t delete_handle_for_component(component_handle_t handle)
 {
     callback_handler_t* handler_ptr = NULL;
     callback_handler_t* next_ptr = NULL;
+    if(!normal_queue_active || !priority_queue_active)
+    {
+        return 1;
+    }
     if(normal_queue_active)
     {
         handler_ptr = normal_queue_handlers[handle].callback_list_start;
@@ -140,6 +147,7 @@ uint8_t delete_handle_for_component(component_handle_t handle)
     }
     lowest_unregistered_queue_handle = handle;
     queue_handle_cnt--;
+    return 0;
 }
 
 callback_handle_t register_component_handler_for_messages(void (*func_ptr)(uint8_t, void*), component_handle_t handle)

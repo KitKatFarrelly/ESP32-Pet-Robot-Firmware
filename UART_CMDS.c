@@ -18,6 +18,10 @@
 static const char *TAG = "USB_UART";
 static uint8_t buf[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1];
 
+// static variables
+static component_handle_t s_uart_component_handle = 0;
+static bool s_has_component_handle = false;
+
 // helper functions
 
 static uint8_t uart_get_hex_from_char(char to_convert);
@@ -274,7 +278,74 @@ static void uart_flash_cmds(uint8_t argc, const char** argv)
 
 static void uart_msg_queue_cmds(uint8_t argc, const char** argv)
 {
-    //Implement Message Queue Commands
+    if(argc < 2)
+    {
+        ESP_LOGE(TAG, "incorrect number of args");
+        return;
+    }
+    if(strcmp((char*) argv[1], (const char*) "msg_create_handle") == 0)
+    {
+        if(!s_has_component_handle)
+        {
+            uint8_t error = 0;
+            if(error = create_handle_for_component(&s_uart_component_handle))
+            {
+                ESP_LOGE(TAG, "failed to register UART to message queue with error %u", error);
+            }
+            else
+            {
+                s_has_component_handle = true;
+                ESP_LOGI(TAG, "new handle for UART: %u", s_uart_component_handle);
+            }
+        }
+        else
+        {
+            ESP_LOGI(TAG, "handle for UART already exists: %u", s_uart_component_handle);
+        }
+    }
+    else if(strcmp((char*) argv[1], (const char*) "msg_delete_handle") == 0)
+    {
+        if(s_has_component_handle)
+        {
+            uint8_t error = 0;
+            if(error = delete_handle_for_component(s_uart_component_handle))
+            {
+                ESP_LOGE(TAG, "failed to delete UART from message queue with error %u", error);
+            }
+            else
+            {
+                s_has_component_handle = false;
+                ESP_LOGI(TAG, "successfully deleted UART from message queue.");
+            }
+        }
+        else
+        {
+            ESP_LOGI(TAG, "handle for UART does not exist.");
+        }
+    }
+    else if(strcmp((char*) argv[1], (const char*) "msg_register_cb") == 0)
+    {
+
+    }
+    else if(strcmp((char*) argv[1], (const char*) "msg_unregister_cb") == 0)
+    {
+
+    }
+    else if(strcmp((char*) argv[1], (const char*) "msg_send_message") == 0)
+    {
+
+    }
+    else if(strcmp((char*) argv[1], (const char*) "msg_clear_handles") == 0)
+    {
+        if(clear_all_handles())
+        {
+            ESP_LOGI(TAG, "failed to delete all component handles.");
+        }
+        else
+        {
+            ESP_LOGI(TAG, "successfully deleted all queue component handles.");
+        }
+    }
 }
 
 static uint8_t uart_get_hex_from_char(char to_convert)
