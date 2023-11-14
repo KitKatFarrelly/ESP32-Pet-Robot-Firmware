@@ -11,7 +11,9 @@ typedef enum
     motor,
     led,
     mesh,
+    uart,
     error,
+    dispatcher_max,
 } dispatcher_type_t;
 
 void UART_INIT(void);

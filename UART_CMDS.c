@@ -21,6 +21,7 @@ static uint8_t buf[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1];
 // static variables
 static component_handle_t s_uart_component_handle = 0;
 static bool s_has_component_handle = false;
+static callback_handle_t UART_callback_handles[dispatcher_max] = {0};
 
 // helper functions
 
@@ -32,6 +33,14 @@ static uint8_t uart_convert_str_to_args(const uint8_t * cmd_buf, char** argv_ptr
 
 static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event);
 static void tinyusb_cdc_line_state_changed_callback(int itf, cdcacm_event_t *event);
+
+// message queue functions
+
+static void uart_msg_queue_handler(component_handle_t component_type, uint8_t message_type, void* message_data);
+static char* uart_return_string_from_dispatcher(dispatcher_type_t dispatcher);
+static dispatcher_type_t uart_get_dispatcher_from_component(component_handle_t component);
+static component_handle_t uart_get_component_handle_from_dispatcher(dispatcher_type_t dispatcher);
+static bool uart_does_component_have_a_handle(dispatcher_type_t dispatcher);
 
 // uart command lists
 
@@ -100,14 +109,14 @@ static void uart_tof_cmds(uint8_t argc, const char** argv)
     {
         uint8_t write_cnt = 0;
         uint8_t write_bytes[UART_MAX_ARGS - 2] = {0};
-
+        uint8_t i = 0;
         if(argc < 3)
         {
             ESP_LOGE(TAG, "Incorrect size args");
             return;
         }
 
-        for(uint8_t i = 2; (i < argc) && (i < UART_MAX_ARGS); i++)
+        for(i = 2; (i < argc) && (i < UART_MAX_ARGS); i++)
         {
             if(uart_get_hex_from_char(argv[i][0]) == UART_INVALID_CHARACTER)
             {
@@ -150,13 +159,14 @@ static void uart_flash_cmds(uint8_t argc, const char** argv)
     if(strcmp((char*) argv[1], (const char*) "write_flash") == 0)
     {
         uint8_t write_cnt = 0;
-        uint8_t write_bytes[UART_MAX_ARGS - 2] = {0};
+        uint8_t write_bytes[UART_MAX_ARGS - 3] = {0};
+        uint8_t i = 0;
         if(argc < 4)
         {
             ESP_LOGE(TAG, "Incorrect size args");
             return;
         }
-        for(uint8_t i = 3; (i < argc) && (i < UART_MAX_ARGS); i++)
+        for(i = 3; (i < argc) && (i < UART_MAX_ARGS); i++)
         {
             if(uart_get_hex_from_char(argv[i][0]) == UART_INVALID_CHARACTER)
             {
@@ -325,15 +335,106 @@ static void uart_msg_queue_cmds(uint8_t argc, const char** argv)
     }
     else if(strcmp((char*) argv[1], (const char*) "msg_register_cb") == 0)
     {
-
+        if(argc < 3)
+        {
+            ESP_LOGE(TAG, "Incorrect size args");
+            return;
+        }
+        dispatcher_type_t callback_index = uart_get_dispatcher(argv[2]);
+        if(!uart_does_component_have_a_handle(callback_index))
+        {
+            ESP_LOGE(TAG, "component handle for %s does not exist.", uart_return_string_from_dispatcher(callback_index));
+            return;
+        }
+        component_handle_t component = uart_get_component_handle_from_dispatcher(callback_index);
+        ESP_LOGI(TAG, "registering UART handler for %s messages:", uart_return_string_from_dispatcher(callback_index));
+        UART_callback_handles[callback_index] = register_component_handler_for_messages(uart_msg_queue_handler, component);
+        if(UART_callback_handles[callback_index]) //returning 0 means no callback handle was generated.
+        {
+            ESP_LOGI(TAG, "registration successful!");
+        }
+        else
+        {
+            ESP_LOGE(TAG, "registration failed!");
+        }
     }
     else if(strcmp((char*) argv[1], (const char*) "msg_unregister_cb") == 0)
     {
-
+        if(argc < 3)
+        {
+            ESP_LOGE(TAG, "Incorrect size args");
+            return;
+        }
+        dispatcher_type_t callback_index = uart_get_dispatcher(argv[2]);
+        if(!uart_does_component_have_a_handle(callback_index))
+        {
+            ESP_LOGE(TAG, "failed to unregister: component handle does not exist.");
+            return;
+        }
+        component_handle_t component = uart_get_component_handle_from_dispatcher(callback_index);
+        if(UART_callback_handles[callback_index] == 0)
+        {
+            ESP_LOGE(TAG, "failed to unregister: callback handle does not exist.");
+            return;
+        }
+        ESP_LOGI(TAG, "unregistering UART handler from %s messages:", uart_return_string_from_dispatcher(callback_index));
+        if(unregister_component_handler_for_messages(component, UART_callback_handles[callback_index]))
+        {
+            ESP_LOGE(TAG, "unregistration failed!");
+        }
+        else
+        {
+            ESP_LOGI(TAG, "unregistration successful!");
+            UART_callback_handles[callback_index] = 0;
+        }
     }
     else if(strcmp((char*) argv[1], (const char*) "msg_send_message") == 0)
     {
-
+        if(s_has_component_handle)
+        {
+            if(argc < 4)
+            {
+                ESP_LOGE(TAG, "Incorrect size args");
+                return;
+            }
+            message_info_t* message = malloc(sizeof(message_info_t));
+            message->component_handle = s_uart_component_handle;
+            message->message_type = 0;
+            message->message_data = malloc(sizeof(argv[3]));
+            memcpy(message->message_data, argv[3], sizeof(message->message_data));
+            if(strcmp((char*) argv[2], (const char*) "priority") == 0)
+            {
+                if(check_is_queue_active(1))
+                {
+                    send_message_to_priority_queue(message);
+                    ESP_LOGI(TAG, "sent priority queue message with payload %s.", argv[3]);
+                }
+                else
+                {
+                    ESP_LOGE(TAG, "priority queue is inactive.");
+                }
+            }
+            else if(strcmp((char*) argv[2], (const char*) "normal") == 0)
+            {
+                if(check_is_queue_active(0))
+                {
+                    send_message_to_normal_queue(message);
+                    ESP_LOGI(TAG, "sent normal queue message with payload %s.", argv[3]);
+                }
+                else
+                {
+                    ESP_LOGE(TAG, "normal queue is inactive.");
+                }
+            }
+            else
+            {
+                ESP_LOGE(TAG, "send failed, must set priority");
+            }
+        }
+        else
+        {
+            ESP_LOGE(TAG, "UART has no component handle!!!");
+        }
     }
     else if(strcmp((char*) argv[1], (const char*) "msg_clear_handles") == 0)
     {
@@ -402,6 +503,10 @@ static dispatcher_type_t uart_get_dispatcher(const char * disp_str)
     {
         return mesh;
     }
+    else if(strcmp((char*) cmd_buf, (const char*) "uart") == 0)
+    {
+        return uart;
+    }
     else
     {
         return not_specified;
@@ -423,6 +528,65 @@ static uint8_t uart_convert_str_to_args(const uint8_t * cmd_buf, char** argv_ptr
     argv_ptr[argc] = 0;
 
     return argc;
+}
+
+static void uart_msg_queue_handler(component_handle_t component_type, uint8_t message_type, void* message_data)
+{
+    dispatcher_type_t dispatcher = uart_get_dispatcher_from_component(component_type);
+    ESP_LOGI(TAG, "message from %s with message type %u.", uart_return_string_from_dispatcher(dispatcher), message_type);
+    ESP_LOGI(TAG, "message data:");
+    for(int i = 0; i < sizeof(message_data); i++)
+    {
+        ESP_LOGI(TAG, "%x", (uint8_t) message_data[i]);
+    }
+
+}
+
+static char* uart_return_string_from_dispatcher(dispatcher_type_t dispatcher)
+{
+    switch(dispatcher)
+    {
+        case not_specified: return "not specified";
+        case flash: return "flash";
+        case msg_queue: return "msg queue";
+        case tof: return "tof";
+        case imu: return "imu";
+        case motor: return "motor";
+        case led: return "led";
+        case mesh: return "mesh";
+        case uart: return "uart";
+        case error: return "error";
+        default: return "unknown component";
+    }
+}
+
+static dispatcher_type_t uart_get_dispatcher_from_component(component_handle_t component)
+{
+    for(dispatcher_type_t i = 0; i < dispatcher_max; i++)
+    {
+        if(UART_callback_handles[i] = component)
+        {
+            return i;
+        }
+    }
+    return error;
+}
+
+static component_handle_t uart_get_component_handle_from_dispatcher(dispatcher_type_t dispatcher)
+{
+    switch(dispatcher)
+    {
+        case uart: return s_uart_component_handle;
+        default: return 0;
+    }
+}
+static bool uart_does_component_have_a_handle(dispatcher_type_t dispatcher)
+{
+    switch(dispatcher)
+    {
+        case uart: return s_has_component_handle;
+        default: return false;
+    }
 }
 
 static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event)
@@ -490,6 +654,11 @@ static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event)
             ESP_LOGI(TAG, "Mesh commands not implemented");
             break;
         }
+        case uart:
+        {
+            ESP_LOGI(TAG, "UART commands not implemented");
+            break;
+        }
         default:
         {
             ESP_LOGI(TAG, "invalid specifier");
@@ -535,6 +704,8 @@ void UART_INIT(void)
                         &tinyusb_cdc_line_state_changed_callback));
 
     ESP_ERROR_CHECK(esp_tusb_init_console(0));
+
+    memset(UART_callback_handles, 0, sizeof(UART_callback_handles));
 
     ESP_LOGI(TAG, "USB initialization DONE");
 }

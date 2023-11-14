@@ -108,9 +108,9 @@ uint8_t create_handle_for_component(component_handle_t* handle)
         priority_queue_handlers[lowest_unregistered_queue_handle].callback_list_start = NULL;
     }
     queue_handle_cnt++;
-    for(component_handle_t i = 0; is_handle_registered(i) && i <= queue_handle_cnt; i++)
+    for(component_handle_t i = 0; is_handle_registered(i) && i < queue_handle_cnt; i++)
     {
-        lowest_unregistered_queue_handle = i;
+        lowest_unregistered_queue_handle = i + 1;
     }
     return 0;
 }
@@ -150,7 +150,7 @@ uint8_t delete_handle_for_component(component_handle_t handle)
     return 0;
 }
 
-callback_handle_t register_component_handler_for_messages(void (*func_ptr)(uint8_t, void*), component_handle_t handle)
+callback_handle_t register_component_handler_for_messages(void (*func_ptr)(component_handle_t, uint8_t, void*), component_handle_t handle)
 {
     callback_handle_t return_handle = 0;
     if(normal_queue_handlers[handle].is_component_registered && normal_queue_active)
@@ -223,7 +223,7 @@ uint8_t send_message_to_normal_queue(message_info_t* message_info)
     return 0;
 }
 
-callback_handle_t register_priority_handler_for_messages(void (*func_ptr)(uint8_t, void*), component_handle_t handle)
+callback_handle_t register_priority_handler_for_messages(void (*func_ptr)(component_handle_t, uint8_t, void*), component_handle_t handle)
 {
     callback_handle_t return_handle = 0;
     if(priority_queue_handlers[handle].is_component_registered && priority_queue_active)
@@ -298,10 +298,10 @@ uint8_t send_message_to_priority_queue(message_info_t* message_info)
 
 static void normal_queue_loop(void* args)
 {
-    message_info_t message_info;
+    message_info_t* message_info;
     while(normal_queue_active)
     {
-        if (xQueueReceive(normal_message_queue, &message_info, portMAX_DELAY))
+        if (xQueueReceive(normal_message_queue, message_info, portMAX_DELAY))
         {
             component_handler_t component_handler = normal_queue_handlers[message_info->component_handle];
             callback_handler_t* callback_iter = NULL;
@@ -311,9 +311,11 @@ static void normal_queue_loop(void* args)
             }
             while(callback_iter != NULL)
             {
-                (*(callback_iter->callback_ptr))(message_info->message_type, message_info->message_data);
+                (*(callback_iter->callback_ptr))(message_info->component_handle, message_info->message_type, message_info->message_data);
                 callback_iter = callback_iter->next_handler;
             }
+            free(message_info->message_data);
+            free(message_info);
         }
     }
 }
@@ -333,7 +335,7 @@ static void priority_queue_loop(void* args)
             }
             while(callback_iter != NULL)
             {
-                (*(callback_iter->callback_ptr))(message_info->message_type, message_info->message_data);
+                (*(callback_iter->callback_ptr))(message_info->component_handle, message_info->message_type, message_info->message_data);
                 callback_iter = callback_iter->next_handler;
             }
         }

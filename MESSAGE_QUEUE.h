@@ -26,13 +26,13 @@ uint8_t create_handle_for_component(component_handle_t* handle);
 
 uint8_t delete_handle_for_component(component_handle_t handle);
 
-callback_handle_t register_component_handler_for_messages(void (*func_ptr)(uint8_t, void*), component_handle_t handle);
+callback_handle_t register_component_handler_for_messages(void (*func_ptr)(component_handle_t, uint8_t, void*), component_handle_t handle);
 
 uint8_t unregister_component_handler_for_messages(component_handle_t handle, callback_handle_t function_handle);
 
 uint8_t send_message_to_normal_queue(message_info_t* message_info);
 
-callback_handle_t register_priority_handler_for_messages(void (*func_ptr)(uint8_t, void*), component_handle_t handle);
+callback_handle_t register_priority_handler_for_messages(void (*func_ptr)(component_handle_t, uint8_t, void*), component_handle_t handle);
 
 uint8_t unregister_priority_handler_for_messages(component_handle_t handle, callback_handle_t function_handle);
 
