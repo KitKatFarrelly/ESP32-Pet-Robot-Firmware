@@ -26,7 +26,7 @@ static callback_handle_t UART_callback_handles[dispatcher_max] = {0};
 // helper functions
 
 static uint8_t uart_get_hex_from_char(char to_convert);
-static dispatcher_type_t uart_get_dispatcher(const char * disp_str);
+static dispatcher_type_t uart_get_dispatcher(char * disp_str);
 static uint8_t uart_convert_str_to_args(const uint8_t * cmd_buf, char** argv_ptr, uint8_t argv_max);
 
 // usb functions
@@ -44,13 +44,13 @@ static bool uart_does_component_have_a_handle(dispatcher_type_t dispatcher);
 
 // uart command lists
 
-static void uart_tof_cmds(uint8_t argc, const char** argv);
-static void uart_flash_cmds(uint8_t argc, const char** argv);
-static void uart_msg_queue_cmds(uint8_t argc, const char** argv);
+static void uart_tof_cmds(uint8_t argc, char** argv);
+static void uart_flash_cmds(uint8_t argc, char** argv);
+static void uart_msg_queue_cmds(uint8_t argc, char** argv);
 
 // function defs
 
-static void uart_tof_cmds(uint8_t argc, const char** argv)
+static void uart_tof_cmds(uint8_t argc, char** argv)
 {
     if(argc < 2)
     {
@@ -62,7 +62,7 @@ static void uart_tof_cmds(uint8_t argc, const char** argv)
         uint8_t config_type = 0;
         if(argc == 3)
         {
-            config_type = (uint8_t) (argv[2][0] - "0");
+            config_type = (uint8_t) (argv[2][0] - '0');
         }
         TOF_LOAD_CONFIG(config_type);
     }
@@ -99,7 +99,7 @@ static void uart_tof_cmds(uint8_t argc, const char** argv)
         ESP_LOGI(TAG, "Reading %d bytes from register 0x%x", read_bytes, read_reg);
         TOF_READ_WRITE(read_data, read_bytes, &read_reg, 1);
         ESP_LOGI(TAG, "Read the following bytes: ");
-        for(i = 0; i < read_bytes; i++)
+        for(uint8_t i = 0; i < read_bytes; i++)
         {
             ESP_LOGI(TAG, "%x", read_data[i]);
         }
@@ -132,7 +132,7 @@ static void uart_tof_cmds(uint8_t argc, const char** argv)
                 return;
             }
 
-            write_bytes[write_cnt] += uart_get_hex_from_char(argv[2][1])
+            write_bytes[write_cnt] += uart_get_hex_from_char(argv[2][1]);
 
             write_cnt++;
         }
@@ -149,7 +149,7 @@ static void uart_tof_cmds(uint8_t argc, const char** argv)
     }
 }
 
-static void uart_flash_cmds(uint8_t argc, const char** argv)
+static void uart_flash_cmds(uint8_t argc, char** argv)
 {
     if(argc < 2)
     {
@@ -182,7 +182,7 @@ static void uart_flash_cmds(uint8_t argc, const char** argv)
                 return;
             }
 
-            write_bytes[write_cnt] += uart_get_hex_from_char(argv[2][1])
+            write_bytes[write_cnt] += uart_get_hex_from_char(argv[2][1]);
 
             write_cnt++;
         }
@@ -210,10 +210,10 @@ static void uart_flash_cmds(uint8_t argc, const char** argv)
                 read_bytes += (uint8_t) (argv[3][i] - '0');
             }
         }
-        ESP_LOGI(TAG, "Reading %d bytes from key %s", read_bytes, read_reg);
+        ESP_LOGI(TAG, "Reading %d bytes from key %s", read_bytes, argv[2]);
         uint8_t* read_data = FLASH_READ_FROM_BLOB("factory", "flash", argv[2], read_bytes);
         ESP_LOGI(TAG, "Read the following bytes: ");
-        for(i = 0; i < read_bytes; i++)
+        for(uint8_t i = 0; i < read_bytes; i++)
         {
             ESP_LOGI(TAG, "%x", read_data[i]);
         }
@@ -245,7 +245,7 @@ static void uart_flash_cmds(uint8_t argc, const char** argv)
             partition_info = FLASH_GET_PARTITION_INFO(argv[2]);
             ESP_LOGI(TAG, "info for %s partition:", argv[2]);
         }
-        if(partition_info == NULL)
+        if(partition_info.number_of_entries == 0)
         {
             ESP_LOGE(TAG, "failed to retrieve info!");
             return;
@@ -286,7 +286,7 @@ static void uart_flash_cmds(uint8_t argc, const char** argv)
     }
 }
 
-static void uart_msg_queue_cmds(uint8_t argc, const char** argv)
+static void uart_msg_queue_cmds(uint8_t argc, char** argv)
 {
     if(argc < 2)
     {
@@ -298,7 +298,7 @@ static void uart_msg_queue_cmds(uint8_t argc, const char** argv)
         if(!s_has_component_handle)
         {
             uint8_t error = 0;
-            if(error = create_handle_for_component(&s_uart_component_handle))
+            if((error = create_handle_for_component(&s_uart_component_handle)) > 0)
             {
                 ESP_LOGE(TAG, "failed to register UART to message queue with error %u", error);
             }
@@ -318,7 +318,7 @@ static void uart_msg_queue_cmds(uint8_t argc, const char** argv)
         if(s_has_component_handle)
         {
             uint8_t error = 0;
-            if(error = delete_handle_for_component(s_uart_component_handle))
+            if((error = create_handle_for_component(&s_uart_component_handle)) > 0)
             {
                 ESP_LOGE(TAG, "failed to delete UART from message queue with error %u", error);
             }
@@ -397,11 +397,11 @@ static void uart_msg_queue_cmds(uint8_t argc, const char** argv)
                 ESP_LOGE(TAG, "Incorrect size args");
                 return;
             }
-            message_info_t* message = malloc(sizeof(message_info_t));
-            message->component_handle = s_uart_component_handle;
-            message->message_type = 0;
-            message->message_data = malloc(sizeof(argv[3]));
-            memcpy(message->message_data, argv[3], sizeof(message->message_data));
+            message_info_t message;
+            message.component_handle = s_uart_component_handle;
+            message.message_type = 0;
+            message.message_data = malloc(sizeof(char*) * (strlen(argv[3]) + 1));
+            memcpy(message.message_data, argv[3], sizeof(char*) * (strlen(argv[3]) + 1));
             if(strcmp((char*) argv[2], (const char*) "priority") == 0)
             {
                 if(check_is_queue_active(1))
@@ -469,41 +469,41 @@ static uint8_t uart_get_hex_from_char(char to_convert)
     }
 }
 
-static dispatcher_type_t uart_get_dispatcher(const char * disp_str)
+static dispatcher_type_t uart_get_dispatcher(char * disp_str)
 {
     if(disp_str == NULL)
     {
         return error;
     }
-    else if(strcmp((char*) cmd_buf, (const char*) "flash") == 0)
+    else if(strcmp(disp_str, (const char*) "flash") == 0)
     {
         return flash;
     }
-    else if(strcmp((char*) cmd_buf, (const char*) "msg_queue") == 0)
+    else if(strcmp(disp_str, (const char*) "msg_queue") == 0)
     {
         return msg_queue;
     }
-    else if(strcmp((char*) cmd_buf, (const char*) "tof") == 0)
+    else if(strcmp(disp_str, (const char*) "tof") == 0)
     {
         return tof;
     }
-    else if(strcmp((char*) cmd_buf, (const char*) "imu") == 0)
+    else if(strcmp(disp_str, (const char*) "imu") == 0)
     {
         return imu;
     }
-    else if(strcmp((char*) cmd_buf, (const char*) "motor") == 0)
+    else if(strcmp(disp_str, (const char*) "motor") == 0)
     {
         return motor;
     }
-    else if(strcmp((char*) cmd_buf, (const char*) "led") == 0)
+    else if(strcmp(disp_str, (const char*) "led") == 0)
     {
         return led;
     }
-    else if(strcmp((char*) cmd_buf, (const char*) "mesh") == 0)
+    else if(strcmp(disp_str, (const char*) "mesh") == 0)
     {
         return mesh;
     }
-    else if(strcmp((char*) cmd_buf, (const char*) "uart") == 0)
+    else if(strcmp(disp_str, (const char*) "uart") == 0)
     {
         return uart;
     }
@@ -535,9 +535,10 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
     dispatcher_type_t dispatcher = uart_get_dispatcher_from_component(component_type);
     ESP_LOGI(TAG, "message from %s with message type %u.", uart_return_string_from_dispatcher(dispatcher), message_type);
     ESP_LOGI(TAG, "message data:");
+    uint8_t* output_data = (uint8_t*) message_data;
     for(int i = 0; i < sizeof(message_data); i++)
     {
-        ESP_LOGI(TAG, "%x", (uint8_t) message_data[i]);
+        ESP_LOGI(TAG, "%x", output_data[i]);
     }
 
 }
@@ -564,7 +565,7 @@ static dispatcher_type_t uart_get_dispatcher_from_component(component_handle_t c
 {
     for(dispatcher_type_t i = 0; i < dispatcher_max; i++)
     {
-        if(UART_callback_handles[i] = component)
+        if(UART_callback_handles[i] == component)
         {
             return i;
         }
@@ -626,7 +627,7 @@ static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event)
         }
         case msg_queue:
         {
-            uart_msg_queue_cmds(argc, argv)
+            uart_msg_queue_cmds(argc, argv);
             break;
         }
         case tof:

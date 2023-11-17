@@ -3,6 +3,7 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/queue.h"
 #include "esp_log.h"
 #include "esp_system.h"
 
@@ -10,12 +11,14 @@
 
 #define MAX_COMPONENT_REGISTRATIONS 10
 
-typedef struct
+struct callback_node_t
 {
     callback_handle_t callback_handle;
-    void (*callback_ptr)(uint8_t);
-    callback_handler_t* next_handler;
-} callback_handler_t;
+    void (*callback_ptr)(component_handle_t, uint8_t, void*);
+    struct callback_node_t* next_handler;
+};
+
+typedef struct callback_node_t callback_handler_t;
 
 typedef struct
 {
@@ -23,7 +26,7 @@ typedef struct
     callback_handler_t* callback_list_start;
 } component_handler_t;
 
-static const char *TAG = "MSG_QUEUE";
+//static const char *TAG = "MSG_QUEUE"; //Should use in future
 
 static void normal_queue_loop(void* args);
 static void priority_queue_loop(void* args);
@@ -216,10 +219,10 @@ uint8_t unregister_component_handler_for_messages(component_handle_t handle, cal
     return 1;
 }
 
-uint8_t send_message_to_normal_queue(message_info_t* message_info)
+uint8_t send_message_to_normal_queue(message_info_t message_info)
 {
     if(!normal_queue_active) return 1;
-    xQueueSend(normal_message_queue, message_info, NULL);
+    xQueueSend(normal_message_queue, &message_info, ( TickType_t ) 0);
     return 0;
 }
 
@@ -289,21 +292,21 @@ uint8_t unregister_priority_handler_for_messages(component_handle_t handle, call
     return 1;
 }
 
-uint8_t send_message_to_priority_queue(message_info_t* message_info)
+uint8_t send_message_to_priority_queue(message_info_t message_info)
 {
     if(!priority_queue_active) return 1;
-    xQueueSend(priority_message_queue, message_info, NULL);
+    xQueueSend(priority_message_queue, &message_info, ( TickType_t ) 0);
     return 0;
 }
 
 static void normal_queue_loop(void* args)
 {
-    message_info_t* message_info;
+    message_info_t message_info;
     while(normal_queue_active)
     {
-        if (xQueueReceive(normal_message_queue, message_info, portMAX_DELAY))
+        if (xQueueReceive(normal_message_queue, &message_info, portMAX_DELAY))
         {
-            component_handler_t component_handler = normal_queue_handlers[message_info->component_handle];
+            component_handler_t component_handler = normal_queue_handlers[message_info.component_handle];
             callback_handler_t* callback_iter = NULL;
             if(component_handler.is_component_registered)
             {
@@ -311,11 +314,10 @@ static void normal_queue_loop(void* args)
             }
             while(callback_iter != NULL)
             {
-                (*(callback_iter->callback_ptr))(message_info->component_handle, message_info->message_type, message_info->message_data);
+                (*(callback_iter->callback_ptr))(message_info.component_handle, message_info.message_type, message_info.message_data);
                 callback_iter = callback_iter->next_handler;
             }
-            free(message_info->message_data);
-            free(message_info);
+            free(message_info.message_data);
         }
     }
 }
@@ -327,7 +329,7 @@ static void priority_queue_loop(void* args)
     {
         if (xQueueReceive(priority_message_queue, &message_info, portMAX_DELAY))
         {
-            component_handler_t component_handler = priority_queue_handlers[message_info->component_handle];
+            component_handler_t component_handler = priority_queue_handlers[message_info.component_handle];
             callback_handler_t* callback_iter = NULL;
             if(component_handler.is_component_registered)
             {
@@ -335,9 +337,10 @@ static void priority_queue_loop(void* args)
             }
             while(callback_iter != NULL)
             {
-                (*(callback_iter->callback_ptr))(message_info->component_handle, message_info->message_type, message_info->message_data);
+                (*(callback_iter->callback_ptr))(message_info.component_handle, message_info.message_type, message_info.message_data);
                 callback_iter = callback_iter->next_handler;
             }
+            free(message_info.message_data);
         }
     }
 }

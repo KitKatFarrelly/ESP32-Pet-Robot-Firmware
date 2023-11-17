@@ -40,20 +40,23 @@ uint8_t FLASH_ERASE_PARTITION(const char* partition_name)
     return 0;
 }
 
-PARTITION_INFO_t FLASH_GET_PARTITION_INFO(const char* partition_name);
+PARTITION_INFO_t FLASH_GET_PARTITION_INFO(const char* partition_name)
 {
     PARTITION_INFO_t return_info;
+    return_info.number_of_entries = 0;
+    return_info.in_use_entries = 0;
+    return_info.free_entries = 0;
 
-    nvs_stats_t = stats_handle;
+    nvs_stats_t stats_handle;
     esp_err_t err = nvs_get_stats(partition_name, &stats_handle);
     if (err != ESP_OK)
     {
-        return NULL;
+        return return_info;
     }
 
     return_info.number_of_entries = stats_handle.total_entries;
     return_info.in_use_entries = stats_handle.used_entries;
-    return_info.free_entries = stats_handle.available_entries;
+    return_info.free_entries = stats_handle.free_entries;
 
     return return_info;
 }
@@ -102,7 +105,7 @@ uint8_t FLASH_WRITE_TO_BLOB(const char* partition_name, const char* namespace, c
     }
 
     // Read the size of memory space required for blob
-    err = nvs_set_blob(write_handle, blob_name, serialized_data, &serial_size);
+    err = nvs_set_blob(write_handle, blob_name, serialized_data, serial_size);
     if (err != ESP_OK) 
     {
         nvs_close(write_handle);
@@ -145,43 +148,18 @@ uint8_t* FLASH_READ_FROM_BLOB(const char* partition_name, const char* namespace,
     }
     nvs_close(read_handle);
 
-    uint8_t* read_data = flash_deserialize();
+    uint8_t* read_data = flash_deserialize(serial_data, serial_size, size);
 
     free(serial_data);
     return read_data;
 }
 
-const char* FLASH_CREATE_FILE(const char* partition_name, const char* blob_name, unsigned long size)
-{
-    return NULL;
-}
-
-uint8_t FLASH_DELETE_FILE(const char* partition_name)
-{
-    return 0;
-}
-
-void* FLASH_GET_FILE_INFO(const char* partition_name)
-{
-    return NULL;
-}
-
-uint8_t FLASH_WRITE_TO_FILE(const char* partition_name, unsigned long offset, void* data, unsigned long size)
-{
-    return 0;
-}
-
-void* FLASH_READ_FROM_FILE(const char* partition_name, unsigned long offset, unsigned long size)
-{
-    return NULL;
-}
-
 static uint32_t* flash_serialize(uint8_t* input_pointer, size_t input_size, size_t* output_size)
 {
-    *output_size = (size / 4);
-    if(size % 4)
+    *output_size = (input_size / 4);
+    if(input_size % 4)
     {
-        *output_size++;
+        (*output_size)++;
     }
 
     uint32_t* output_pointer = malloc(sizeof(uint32_t)*(*output_size));
@@ -190,14 +168,14 @@ static uint32_t* flash_serialize(uint8_t* input_pointer, size_t input_size, size
 
     for(size_t in_iter = 0; in_iter < input_size; in_iter++)
     {
-        if(out_iter => *output_size)
+        if(out_iter >= *output_size)
         {
             break;
         }
         else
         {
             output_pointer[out_iter] += (input_pointer[in_iter] << (8 * (in_iter % 4)));
-            ESP_LOGI(TAG, "byte serialized: %zx at position %zu", output_pointer[out_iter], (in_iter % 4));
+            ESP_LOGI(TAG, "byte serialized: %lx at position %zu", output_pointer[out_iter], (in_iter % 4));
         }
         if(in_iter % 4 == 3)
         {
@@ -218,7 +196,7 @@ static uint8_t* flash_deserialize(uint32_t* input_pointer, size_t input_size, si
     {
         for(uint8_t j = 0; j < 4; j++)
         {
-            if(out_iter => output_size)
+            if(out_iter >= output_size)
             {
                 break;
             }

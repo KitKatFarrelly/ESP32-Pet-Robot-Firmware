@@ -37,7 +37,7 @@
 
 //Commands
 
-static uint8_t DOWNLOAD_INIT[5] = {0x08, 0x14, 0x01, 0x29, 0xC1};
+//static uint8_t DOWNLOAD_INIT[5] = {0x08, 0x14, 0x01, 0x29, 0xC1};
 
 static uint8_t SET_FW_ADDR[6] = {0x08, 0x43, 0x02, 0x00, 0x00, 0xBA};
 
@@ -53,7 +53,7 @@ static uint8_t TOF_FIRMWARE_CHECK(void);
 static uint8_t TOF_FIRMWARE_DOWNLOAD(void);
 static uint8_t TOF_DOWNLOAD_CMD(unsigned long firmware_idx, uint8_t firmware_length);
 static uint8_t TOF_WAIT_UNTIL_READY(void);
-static uint8_t TOF_WAIT_UNTIL_READY_APP(uint8_t delay_between_attempts);
+static uint8_t TOF_WAIT_UNTIL_READY_APP(uint32_t delay_between_attempts);
 static uint8_t TOF_CHECK_REGISTERS(uint8_t* read_reg, uint8_t* comp_reg, uint8_t size);
 static esp_err_t TOF_READ_WRITE_APP(uint8_t* TOF_OUT, uint8_t out_dat_size, uint8_t* TOF_IN, uint8_t in_dat_size, uint8_t wait_ms);
 static esp_err_t TOF_WRITE_APP(uint8_t* TOF_IN, uint8_t dat_size, uint8_t wait_ms);
@@ -71,8 +71,9 @@ static uint8_t s_current_config = 0;
 
 // Interrupt Handler
 
-static void TOF_MEASUREMENT_INTR_HANDLE(void);
+static void TOF_MEASUREMENT_INTR_HANDLE(void* arg);
 
+/* TO DO
 // Task Handling
 
 // Message Handler
@@ -80,6 +81,7 @@ static void TOF_MESSAGE_HANDLER(void);
 
 // Task to Convert Read Buffer to a distance array
 static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void);
+*/
 
 
 void TOF_INIT(void)
@@ -324,7 +326,7 @@ uint8_t TOF_LOAD_FACTORY_CALIBRATION(void)
 	uint8_t number_of_factory_calibrations = (s_is_tmf8828_mode) ? 4 : 1;
 	uint8_t write_data[65] = {0};
 	uint8_t factory_counter = 0;
-	uint8_t factory_calibration[0xC0];
+	uint8_t* factory_calibration;
 	char fac_cal_blob_name[20] = {0};
 
 	// Steps:
@@ -365,7 +367,7 @@ uint8_t TOF_LOAD_FACTORY_CALIBRATION(void)
 				dat_size = 0x40;
 			}
 			write_data[0] = 0x24 + (factory_counter);
-			memncpy((write_data + 1), (factory_calibration + factory_counter + 4), dat_size);
+			memcpy((write_data + 1), (factory_calibration + factory_counter + 4), dat_size);
 			if(TOF_WRITE_APP(write_data, dat_size + 1, 5) != ESP_OK) return 1;
 			factory_counter += dat_size;
 		}
@@ -381,6 +383,7 @@ uint8_t TOF_LOAD_FACTORY_CALIBRATION(void)
 		// Check command was executed
 		if(TOF_WAIT_UNTIL_READY_APP(3)) return 1;
 	}
+	return 0;
 }
 
 uint8_t TOF_RETURN_CALIBRATION_STATUS(void)
@@ -451,6 +454,7 @@ esp_err_t TOF_WRITE(uint8_t* TOF_IN, uint8_t dat_size)
 static uint8_t TOF_SET_FACTORY_CAL_BLOB_NAME(uint8_t iter, char* blob_name)
 {
 	size_t fac_cal_strlen = 0;
+	uint8_t number_of_factory_calibrations = (s_is_tmf8828_mode) ? 4 : 1;
 	switch(iter)
 	{
 		case 0:
@@ -696,7 +700,7 @@ static uint8_t TOF_WAIT_UNTIL_READY(void)
 	return 1;
 }
 
-static uint8_t TOF_WAIT_UNTIL_READY_APP(uint8_t delay_between_attempts)
+static uint8_t TOF_WAIT_UNTIL_READY_APP(uint32_t delay_between_attempts)
 {
 	//Same as TOF_WAIT_UNTIL_READY but does not check for checksum.
 	uint8_t tof_reg_addr = 0x08;
@@ -741,6 +745,8 @@ static uint8_t TOF_CHECK_REGISTERS(uint8_t* read_reg, uint8_t* comp_reg, uint8_t
 	return mismatched_reg_count;
 }
 
+/* Still need to implement sending and receiving messages
+
 static void TOF_MESSAGE_HANDLER(void)
 {
 	
@@ -751,7 +757,9 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 	return 0;
 }
 
-static void TOF_MEASUREMENT_INTR_HANDLE(void)
+*/
+
+static void TOF_MEASUREMENT_INTR_HANDLE(void* arg)
 {
 	uint8_t number_of_measurements = (s_is_tmf8828_mode) ? 4 : 1;
 	uint8_t write_data[2] = {0, 0};
