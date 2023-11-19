@@ -1,4 +1,8 @@
 #include <stdint.h>
+
+#ifdef FUNCTIONAL_TESTS
+#include "mocked_functions.h"
+#else
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -6,6 +10,7 @@
 #include "tusb_console.h"
 #include "tusb_cdc_acm.h"
 #include "sdkconfig.h"
+#endif
 
 #include "UART_CMDS.h"
 #include "ToF_I2C.h"
@@ -590,6 +595,8 @@ static bool uart_does_component_have_a_handle(dispatcher_type_t dispatcher)
     }
 }
 
+#ifndef FUNCTIONAL_TESTS
+
 static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event)
 {
     /* initialization */
@@ -675,9 +682,14 @@ static void tinyusb_cdc_line_state_changed_callback(int itf, cdcacm_event_t *eve
     ESP_LOGI(TAG, "Line state changed! dtr:%d, rst:%d", dtr, rst);
 }
 
+#endif
+
 void UART_INIT(void)
 {
     ESP_LOGI(TAG, "USB initialization");
+
+#ifndef FUNCTIONAL_TESTS
+
     const tinyusb_config_t tusb_cfg = {
         .device_descriptor = NULL,
         .string_descriptor = NULL,
@@ -705,6 +717,8 @@ void UART_INIT(void)
                         &tinyusb_cdc_line_state_changed_callback));
 
     ESP_ERROR_CHECK(esp_tusb_init_console(0));
+
+#endif
 
     memset(UART_callback_handles, 0, sizeof(UART_callback_handles));
 

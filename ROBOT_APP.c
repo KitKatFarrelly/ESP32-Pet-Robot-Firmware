@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef FUNCTIONAL_TESTS
+#include "mocked_functions.h"
+#else
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
@@ -9,6 +13,7 @@
 #include "driver/spi_common.h"
 #include "driver/i2c.h"
 #include "driver/gpio.h"
+#endif
 
 //project libraries
 #include "LED_DRVR.h"
@@ -36,6 +41,8 @@ void app_main(void)
 	
 	//TODO - Move
 
+#ifndef FUNCTIONAL_TESTS
+
 	gpio_install_isr_service(0);
 	
 	//POWER INDICATOR INPUTS
@@ -60,6 +67,8 @@ void app_main(void)
     //enable pull-up mode
     io_conf.pull_up_en = 0;
     gpio_config(&io_conf);
+
+#endif
 
 	//Init main nvs partition
 	FLASH_INIT_PARTITION(MAIN_PARTITION);

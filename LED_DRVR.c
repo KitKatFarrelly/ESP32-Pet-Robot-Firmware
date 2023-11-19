@@ -1,6 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
+
+#ifdef FUNCTIONAL_TESTS
+#include "mocked_functions.h"
+#else
 #include "driver/gpio.h"
+#endif
 
 #include "LED_DRVR.h"
 
@@ -9,6 +14,8 @@
 void LED_INIT(void)
 {
 	//LEDS
+
+#ifndef FUNCTIONAL_TESTS
 	
 	//zero-initialize the config structure.
     gpio_config_t io_conf = {};
@@ -24,4 +31,6 @@ void LED_INIT(void)
     io_conf.pull_up_en = 0;
     //configure GPIO with the given settings
     gpio_config(&io_conf);
+
+#endif
 }

@@ -1,9 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef FUNCTIONAL_TESTS
+#include "mocked_functions.h"
+#else
 #include "esp_log.h"
 #include "driver/i2c.h"
 #include "driver/gpio.h"
+#endif
 
 #include "ToF_I2C.h"
 #include "tof_bin_image.h"
@@ -87,6 +92,8 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void);
 void TOF_INIT(void)
 {
 	//I2C SETUP
+
+#ifndef FUNCTIONAL_TESTS
 	
 	gpio_set_level(TOF_EN, 1);
 	
@@ -137,6 +144,8 @@ void TOF_INIT(void)
 	s_measurement_iter = 0;
 	s_measurement_flags = 0;
 	s_current_config = 0;
+
+#endif
 	
 	if(!TOF_FIRMWARE_CHECK())
 	{
@@ -158,8 +167,10 @@ void TOF_INIT(void)
 		s_is_tmf8828_mode = true; //assume that we were succssful in setting tmf8828 mode
 	}
 
+#ifndef FUNCTIONAL_TESTS
 	//TOF INTERRUPT HANDLER
 	gpio_isr_handler_add(TOF_INTR, TOF_MEASUREMENT_INTR_HANDLE, NULL);
+#endif
 }
 
 uint8_t TOF_LOAD_CONFIG(uint8_t config)

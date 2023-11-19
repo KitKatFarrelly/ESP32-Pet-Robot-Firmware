@@ -1,11 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef FUNCTIONAL_TESTS
+#include "mocked_functions.h"
+#else
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#endif
 
 #include "MESSAGE_QUEUE.h"
 

@@ -1,11 +1,16 @@
 #include <stdio.h>
 #include <inttypes.h>
+
+#ifdef FUNCTIONAL_TESTS
+#include "mocked_functions.h"
+#else
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "nvs.h"
+#endif
 
 #include "FLASH_SPI.h"
 

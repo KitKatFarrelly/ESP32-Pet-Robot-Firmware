@@ -1,6 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
+
+#ifdef FUNCTIONAL_TESTS
+#include "mocked_functions.h"
+#else
 #include "driver/gpio.h"
+#endif
 
 #include "MTR_DRVR.h"
 
@@ -9,6 +14,8 @@
 void MTR_INIT(void)
 {
 	//Motor Outputs
+
+#ifndef FUNCTIONAL_TESTS
 	
 	gpio_config_t io_conf = {};
     //disable interrupt
@@ -23,4 +30,6 @@ void MTR_INIT(void)
     io_conf.pull_up_en = 0;
     //configure GPIO with the given settings
     gpio_config(&io_conf);
+
+#endif
 }

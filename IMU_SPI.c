@@ -1,10 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef FUNCTIONAL_TESTS
+#include "mocked_functions.h"
+#else
 #include "esp_log.h"
 #include "driver/spi_master.h"
 #include "driver/spi_common.h"
 #include "driver/gpio.h"
+#endif
 
 #include "IMU_SPI.h"
 
@@ -17,6 +22,8 @@
 #define DMA_CHAN     2
 
 static const char *TAG = "SPI LOG";
+
+#ifndef FUNCTIONAL_TESTS
 
 static void lcd_cmd(spi_device_handle_t spi, uint8_t* cmd, uint8_t in_size, uint8_t* out_data, uint8_t out_size)
 {
@@ -36,9 +43,13 @@ static void lcd_cmd(spi_device_handle_t spi, uint8_t* cmd, uint8_t in_size, uint
 	}
 }
 
+#endif
+
 void IMU_INIT(void)
 {
 	//SPI SETUP
+
+#ifndef FUNCTIONAL_TESTS
 	
 	esp_err_t ret;
 	spi_device_handle_t spi;
@@ -62,4 +73,6 @@ void IMU_INIT(void)
 	//Attach the LCD to the SPI bus
 	ret=spi_bus_add_device(SPI3_HOST, &devcfg, &spi);
 	ESP_ERROR_CHECK(ret);
+
+#endif
 }
