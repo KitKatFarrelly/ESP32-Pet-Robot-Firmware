@@ -1,2 +1,2 @@
 functional_tests/target
-functional_tests/src/bindgen.rs
+functional_tests/src/bindings.rs

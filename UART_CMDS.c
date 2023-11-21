@@ -21,7 +21,9 @@
 #define UART_INVALID_CHARACTER 100
 
 static const char *TAG = "USB_UART";
+#ifndef FUNCTIONAL_TESTS
 static uint8_t buf[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1];
+#endif
 
 // static variables
 static component_handle_t s_uart_component_handle = 0;
@@ -34,10 +36,12 @@ static uint8_t uart_get_hex_from_char(char to_convert);
 static dispatcher_type_t uart_get_dispatcher(char * disp_str);
 static uint8_t uart_convert_str_to_args(const uint8_t * cmd_buf, char** argv_ptr, uint8_t argv_max);
 
+#ifndef FUNCTIONAL_TESTS
 // usb functions
 
 static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event);
 static void tinyusb_cdc_line_state_changed_callback(int itf, cdcacm_event_t *event);
+#endif
 
 // message queue functions
 
