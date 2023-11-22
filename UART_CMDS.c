@@ -409,8 +409,8 @@ static void uart_msg_queue_cmds(uint8_t argc, char** argv)
             message_info_t message;
             message.component_handle = s_uart_component_handle;
             message.message_type = 0;
-            message.message_data = malloc(sizeof(char*) * (strlen(argv[3]) + 1));
-            memcpy(message.message_data, argv[3], sizeof(char*) * (strlen(argv[3]) + 1));
+            message.message_data = malloc(sizeof(char) * (strlen(argv[3]) + 1));
+            memcpy(message.message_data, argv[3], sizeof(char) * strlen(argv[3]));
             if(strcmp((char*) argv[2], (const char*) "priority") == 0)
             {
                 if(check_is_queue_active(1))

@@ -101,7 +101,7 @@ uint8_t FLASH_WRITE_TO_BLOB(const char* partition_name, const char* namespace, c
     size_t serial_size = 0;
     uint32_t* serialized_data = flash_serialize(data, size, &serial_size);
     
-    err = nvs_open_from_partition(partition_name, namespace, NVS_READONLY, &write_handle);
+    err = nvs_open_from_partition(partition_name, namespace, NVS_READWRITE, &write_handle);
     if (err != ESP_OK) 
     {
         nvs_close(write_handle);

@@ -13,7 +13,7 @@ fn main() {
         .expect("cannot canonicalize path");
 
     // This is the path to the `c` headers file.
-    let headers_path = libdir_path.join("bindgen_libs.h");
+    let headers_path = libdir_path.join("bindgen_wrapper.h");
     let headers_path_str = headers_path.to_str().expect("Path is not a valid string");
 
     let dst = cmake::Config::new(".").generator("Ninja").build();
