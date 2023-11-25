@@ -35,12 +35,18 @@ typedef uint8_t gpio_num_t;
 
 typedef void* QueueHandle_t;
 
-typedef uint8_t TickType_t;
+typedef uint16_t TickType_t;
 
 typedef uint8_t nvs_handle_t;
 
 void app_main(void);
 
-void* xQueueCreate(uint8_t queue_length, size_t queue_type);
+QueueHandle_t xQueueCreate(uint8_t queue_length, size_t queue_type);
+
+void xTaskCreate(void (*func_ptr)(void*), const char* name, size_t stack_depth, void* pvParams, uint8_t priority, void* handle);
+
+xQueueSend(QueueHandle_t queue_ptr, void* message_info, TickType_t time_thing);
+
+xQueueReceive(QueueHandle_t queue_ptr, void* message_info, TickType_t time_thing);
 
 #endif
