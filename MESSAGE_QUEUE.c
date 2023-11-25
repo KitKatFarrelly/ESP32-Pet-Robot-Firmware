@@ -18,17 +18,17 @@
 
 struct callback_node_t
 {
-    callback_handle_t callback_handle;
     void (*callback_ptr)(component_handle_t, uint8_t, void*);
     struct callback_node_t* next_handler;
+    callback_handle_t callback_handle;
 };
 
 typedef struct callback_node_t callback_handler_t;
 
 typedef struct
 {
-    bool is_component_registered;
     callback_handler_t* callback_list_start;
+    bool is_component_registered;
 } component_handler_t;
 
 //static const char *TAG = "MSG_QUEUE"; //Should use in future

@@ -449,17 +449,29 @@ static esp_err_t TOF_WRITE_APP(uint8_t* TOF_IN, uint8_t dat_size, uint8_t wait_m
 
 esp_err_t TOF_READ(uint8_t* TOF_OUT, uint8_t dat_size)
 {
+#ifdef FUNCTIONAL_TESTS
+	return mock_tof_read(TOF_OUT, dat_size);
+#else
 	return i2c_master_read_from_device(I2C_MASTER_NUM, TOF_SENSOR_ADDR, TOF_OUT, dat_size, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+#endif
 }
 
 esp_err_t TOF_READ_WRITE(uint8_t* TOF_OUT, uint8_t out_dat_size, uint8_t* TOF_IN, uint8_t in_dat_size)
 {
+#ifdef FUNCTIONAL_TESTS
+	return mock_tof_read_write(TOF_OUT, out_dat_size, TOF_IN, in_dat_size);
+#else
 	return i2c_master_write_read_device(I2C_MASTER_NUM, TOF_SENSOR_ADDR, TOF_IN, in_dat_size, TOF_OUT, out_dat_size, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+#endif
 }
 
 esp_err_t TOF_WRITE(uint8_t* TOF_IN, uint8_t dat_size)
 {
+#ifdef FUNCTIONAL_TESTS
+	return mock_tof_write(TOF_IN, dat_size);
+#else
 	return i2c_master_write_to_device(I2C_MASTER_NUM, TOF_SENSOR_ADDR, TOF_IN, dat_size, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+#endif
 }
 
 static uint8_t TOF_SET_FACTORY_CAL_BLOB_NAME(uint8_t iter, char* blob_name)

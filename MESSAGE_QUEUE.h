@@ -9,9 +9,9 @@ typedef uint8_t callback_handle_t;
 
 typedef struct
 {
+    void* message_data;
     component_handle_t component_handle;
     uint8_t message_type; //message_type should be casted from an enum
-    void* message_data;
 } message_info_t;
 
 void MESSAGE_QUEUE_INIT(void);

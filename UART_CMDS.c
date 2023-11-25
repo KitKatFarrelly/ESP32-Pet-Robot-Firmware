@@ -590,6 +590,7 @@ static component_handle_t uart_get_component_handle_from_dispatcher(dispatcher_t
         default: return 0;
     }
 }
+
 static bool uart_does_component_have_a_handle(dispatcher_type_t dispatcher)
 {
     switch(dispatcher)
