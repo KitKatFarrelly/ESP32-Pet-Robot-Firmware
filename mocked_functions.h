@@ -31,9 +31,16 @@ typedef enum
     ESP_MAX,
 } esp_err_t;
 
+typedef struct
+{
+    message_node_t* message_queue_start;
+    size_t data_type_length;
+    uint8_t queue_length;
+} QueueType_t;
+
 typedef uint8_t gpio_num_t;
 
-typedef void* QueueHandle_t;
+typedef QueueType_t* QueueHandle_t;
 
 typedef uint16_t TickType_t;
 
@@ -46,6 +53,18 @@ printf(format, ##__VA_ARGS__);
 #define ESP_LOGI(tag, format, ...); \
 printf("[I] %s:", tag); \
 printf(format, ##__VA_ARGS__);
+
+// functions for testing purposes
+
+bool spinQueueTaskOnce(const char* name);
+
+bool deleteTask(const char* name);
+
+void deleteQueue(QueueHandle_t handle);
+
+bool setTOFReadVal(const uint8_t* read_data, size_t size);
+
+// mocked functions
 
 void app_main(void);
 
@@ -64,8 +83,6 @@ esp_err_t mock_tof_read(uint8_t* TOF_OUT, uint8_t dat_size);
 esp_err_t mock_tof_read_write(uint8_t* TOF_OUT, uint8_t out_dat_size, uint8_t* TOF_IN, uint8_t in_dat_size);
 
 esp_err_t mock_tof_write(uint8_t* TOF_IN, uint8_t dat_size);
-
-void mock_set_tof_read_return(uint8_t* read_buf, uint8_t dat_length);
 
 esp_err_t nvs_flash_init_partition(const char* partition_name);
 
