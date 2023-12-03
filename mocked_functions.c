@@ -21,9 +21,17 @@ typedef struct
     char* blob_name;
 } BlobType_t;
 
+struct TOF_queue_t
+{
+    uint8_t* ToF_data;
+    struct message_t* next_node;
+};
+
+typedef struct TOF_queue_t TOF_queue_node_t;
+
 static TaskType_t task_array[MAX_TASK_REGISTRATIONS] = {0};
 
-static uint8_t* TOF_read_data = NULL;
+static TOF_queue_node_t* TOF_read_queue = NULL;
 
 static nvs_handle_t current_handle = 0;
 
@@ -44,7 +52,7 @@ bool spinQueueTaskOnce(const char* name)
     {
         return false;
     }
-    printf("spinning task %s", task_array[task_array_iterator].name);
+    printf("spinning task %s\n", task_array[task_array_iterator].name);
     (*(task_array[task_array_iterator].func_ptr))(NULL);
     return true;
 }
@@ -56,7 +64,7 @@ bool deleteTask(const char* name)
     {
         return false;
     }
-    printf("deleting task %s", task_array[task_array_iterator].name);
+    printf("deleting task %s\n", task_array[task_array_iterator].name);
     task_array[task_array_iterator].func_ptr = NULL;
     free(task_array[task_array_iterator].name);
     task_array[task_array_iterator].name = NULL;
@@ -70,7 +78,7 @@ bool deleteTask(const char* name)
 void deleteQueue(QueueHandle_t handle)
 {
     //TODO: this should delete all pending queue messages
-    printf("deleting queue at %p", handle);
+    printf("deleting queue at %p\n", handle);
     free(handle);
 }
 
@@ -80,19 +88,38 @@ bool setTOFReadVal(const uint8_t* read_data, size_t size)
     {
         return false;
     }
-    TOF_read_data = malloc(size * sizeof(uint8_t));
-    memcpy(TOF_read_data, read_data, size * sizeof(uint8_t));
+    if(TOF_read_queue == NULL)
+    {
+        TOF_read_queue = malloc(sizeof(TOF_queue_node_t));
+        TOF_read_queue->ToF_data = malloc(size * sizeof(uint8_t));
+        memcpy(TOF_read_queue->ToF_data, read_data, size * sizeof(uint8_t));
+        TOF_read_queue->next_node = NULL;
+    }
+    else
+    {
+        TOF_queue_node_t* lastNode = TOF_read_queue;
+        while(lastNode->next_node != NULL)
+        {
+            lastNode = TOF_read_queue->next_node;
+        }
+        lastNode->next_node = malloc(sizeof(TOF_queue_node_t));
+        lastNode = lastNode->next_node;
+        lastNode->next_node = NULL;
+        lastNode->ToF_data = malloc(size * sizeof(uint8_t));
+        memcpy(lastNode->ToF_data, read_data, size * sizeof(uint8_t));
+    }
+    printf("queued new tof data.\n");
     return true;
 }
 
 static uint8_t getTaskFromName(const char* name)
 {
-    printf("searching for task %s", name);
+    printf("searching for task %s\n", name);
     for(int i = 0; i < MAX_TASK_REGISTRATIONS; i++)
     {
         if(!strcmp(name, task_array[i].name))
         {
-            printf("found task %s at iter %u", name, i);
+            printf("found task %s at iter %u\n", name, i);
             break;
         }
     }
@@ -107,7 +134,7 @@ QueueHandle_t xQueueCreate(uint8_t queue_length, size_t queue_type)
     newQueue->message_queue_start = NULL;
     newQueue->data_type_length = queue_type;
     newQueue->queue_length = queue_length;
-    printf("created queue at %p", newQueue);
+    printf("created queue at %p\n", newQueue);
     return newQueue;
 }
 
@@ -124,7 +151,7 @@ void xTaskCreate(void (*func_ptr)(void*), const char* name, size_t stack_depth, 
             task_array[i].pvParams = pvParams;
             task_array[i].priority = priority;
             task_array[i].handle = handle;
-            printf("created task %s", task_array[i].name);
+            printf("created task %s\n", task_array[i].name);
             break;
         }
     }
@@ -161,7 +188,7 @@ bool xQueueSend(QueueHandle_t queue_ptr, void* message_info, TickType_t time_thi
     lastNode->message_queue = malloc(sizeof(queue_ptr->data_type_length));
     memcpy(lastNode->message_queue, message_info, sizeof(queue_ptr->data_type_length));
     lastNode->next_node = NULL;
-    printf("appended message at %p", lastNode);
+    printf("appended message at %p\n", lastNode);
     return true;
 }
 
@@ -175,7 +202,7 @@ bool xQueueReceive(QueueHandle_t queue_ptr, void* message_info, TickType_t time_
     {
         return false;
     }
-    printf("received message at %p", queue_ptr->message_queue_start);
+    printf("received message at %p\n", queue_ptr->message_queue_start);
     message_node_t* nextNode = queue_ptr->message_queue_start->next_node;
     memcpy(message_info, queue_ptr->message_queue_start->message_queue, sizeof(queue_ptr->data_type_length));
     free(queue_ptr->message_queue_start->message_queue);
@@ -186,45 +213,59 @@ bool xQueueReceive(QueueHandle_t queue_ptr, void* message_info, TickType_t time_
 
 void vTaskDelay(TickType_t time_thing)
 {
-    printf("waited %u ms", time_thing);
+    printf("waited %u ms\n", time_thing);
 }
 
 esp_err_t mock_tof_read(uint8_t* TOF_OUT, uint8_t dat_size)
 {
-    memcpy(TOF_OUT, TOF_read_data, dat_size * sizeof(uint8_t));
+    memcpy(TOF_OUT, TOF_read_queue, dat_size * sizeof(uint8_t));
     return ESP_OK;
 }
 
 esp_err_t mock_tof_read_write(uint8_t* TOF_OUT, uint8_t out_dat_size, uint8_t* TOF_IN, uint8_t in_dat_size)
 {
-    printf("the following bytes were written to TOF");
+    printf("the following bytes were written to TOF\n");
     for(uint8_t i = 0; i < in_dat_size; i++)
-        {
-            printf("%x", TOF_IN[i]);
-        }
-    memcpy(TOF_OUT, TOF_read_data, out_dat_size * sizeof(uint8_t));
-    return ESP_OK;
+    {
+        printf("%x", TOF_IN[i]);
+    }
+    printf("\n");
+    if(TOF_read_queue != NULL)
+    {
+        memcpy(TOF_OUT, TOF_read_queue->ToF_data, out_dat_size * sizeof(uint8_t));
+        TOF_queue_node_t* temp_queue_node = TOF_read_queue->next_node;
+        free(TOF_read_queue->ToF_data);
+        free(TOF_read_queue);
+        TOF_read_queue = temp_queue_node;
+        return ESP_OK;
+    }
+    else
+    {
+        return ESP_ERROR_GENERIC;
+    }
+    
 }
 
 esp_err_t mock_tof_write(uint8_t* TOF_IN, uint8_t dat_size)
 {
-    printf("the following bytes were written to TOF");
+    printf("the following bytes were written to TOF\n");
     for(uint8_t i = 0; i < dat_size; i++)
     {
         printf("%x", TOF_IN[i]);
     }
+    printf("\n");
     return ESP_OK;
 }
 
 esp_err_t nvs_flash_init_partition(const char* partition_name)
 {
-    printf("Initialized %s", partition_name);
+    printf("Initialized %s\n", partition_name);
     return ESP_OK;
 }
 
 esp_err_t nvs_flash_erase_partition(const char* partition_name)
 {
-    printf("Erasing %s", partition_name);
+    printf("Erasing %s\n", partition_name);
     for(int i = 0; i < MAX_BLOBS; i++)
     {
         free(blob_array[i].blob_name);
@@ -236,14 +277,14 @@ esp_err_t nvs_flash_erase_partition(const char* partition_name)
 
 esp_err_t nvs_get_stats(const char* partition_name, nvs_stats_t* stats_handle)
 {
-    printf("Printing stats for %s", partition_name);
+    printf("Printing stats for %s\n", partition_name);
     stats_handle = NULL;
     return ESP_OK;
 }
 
 esp_err_t nvs_open_from_partition(const char* partition_name, const char* namespace_var, bool canWrite, nvs_handle_t* handle_ptr)
 {
-    printf("Opening for %s with namespace %s", partition_name, namespace_var);
+    printf("Opening for %s with namespace %s\n", partition_name, namespace_var);
     current_handle++;
     if(current_handle > 99)
     {
@@ -273,7 +314,7 @@ esp_err_t nvs_get_blob(nvs_handle_t handle, const char* blob_name, uint32_t* ser
     {
         if(!strcmp(blob_name, blob_array[i].blob_name))
         {
-            printf("found blob %s at iter %u", blob_array[i].blob_name, i);
+            printf("found blob %s at iter %u\n", blob_array[i].blob_name, i);
             if(serial_data != NULL)
             {
                 serial_data = blob_array[i].blob;
@@ -300,7 +341,7 @@ esp_err_t nvs_set_blob(nvs_handle_t handle, const char* blob_name, uint32_t* ser
     {
         if(!strcmp(blob_name, blob_array[i].blob_name))
         {
-            printf("found blob %s at iter %u", blob_array[i].blob_name, i);
+            printf("found blob %s at iter %u\n", blob_array[i].blob_name, i);
             free(blob_array[i].blob);
             free(blob_array[i].blob_name);
             lowest_empty_blob = i;
@@ -316,7 +357,7 @@ esp_err_t nvs_set_blob(nvs_handle_t handle, const char* blob_name, uint32_t* ser
     }
     if(lowest_empty_blob < MAX_BLOBS)
     {
-        printf("writing blob %s at iter %u", blob_name, lowest_empty_blob);
+        printf("writing blob %s at iter %u\n", blob_name, lowest_empty_blob);
         blob_array[lowest_empty_blob].blob = malloc(((serial_size / 4) + 1) * sizeof(uint32_t));
         memcpy(blob_array[lowest_empty_blob].blob, serial_data, serial_size);
         blob_array[lowest_empty_blob].blob_name = malloc(sizeof(blob_name) + 1);

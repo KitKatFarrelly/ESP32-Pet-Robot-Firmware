@@ -57,12 +57,14 @@ typedef uint16_t TickType_t;
 typedef uint8_t nvs_handle_t;
 
 #define ESP_LOGE(tag, format, ...); \
-printf("[E] %s:", tag); \
-printf(format, ##__VA_ARGS__);
+printf("[E] %s: ", tag); \
+printf(format, ##__VA_ARGS__); \
+printf("\n");
 
 #define ESP_LOGI(tag, format, ...); \
-printf("[I] %s:", tag); \
-printf(format, ##__VA_ARGS__);
+printf("[I] %s: ", tag); \
+printf(format, ##__VA_ARGS__); \
+printf("\n");
 
 // functions for testing purposes
 
