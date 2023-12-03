@@ -18,7 +18,7 @@
 
 static const char *TAG = "FLASH";
 
-static uint32_t* flash_serialize(uint8_t* input_pointer, size_t input_size, size_t* output_size);
+static uint32_t* flash_serialize(uint8_t* input_pointer, size_t input_size);
 static uint8_t* flash_deserialize(uint32_t* input_pointer, size_t input_size, size_t output_size);
 
 uint8_t FLASH_INIT_PARTITION(const char* partition_name)
@@ -98,8 +98,7 @@ uint8_t FLASH_WRITE_TO_BLOB(const char* partition_name, const char* namespace, c
     nvs_handle_t write_handle;
     esp_err_t err;
 
-    size_t serial_size = 0;
-    uint32_t* serialized_data = flash_serialize(data, size, &serial_size);
+    uint32_t* serialized_data = flash_serialize(data, size);
     
     err = nvs_open_from_partition(partition_name, namespace, NVS_READWRITE, &write_handle);
     if (err != ESP_OK) 
@@ -110,7 +109,7 @@ uint8_t FLASH_WRITE_TO_BLOB(const char* partition_name, const char* namespace, c
     }
 
     // Read the size of memory space required for blob
-    err = nvs_set_blob(write_handle, blob_name, serialized_data, serial_size);
+    err = nvs_set_blob(write_handle, blob_name, serialized_data, size);
     if (err != ESP_OK) 
     {
         nvs_close(write_handle);
@@ -144,7 +143,7 @@ uint8_t* FLASH_READ_FROM_BLOB(const char* partition_name, const char* namespace,
     }
 
     // Read the size of memory space required for blob
-    err = nvs_get_blob(read_handle, blob_name, serial_data, &serial_size);
+    err = nvs_get_blob(read_handle, blob_name, serial_data, &size);
     if (err != ESP_OK) 
     {
         nvs_close(read_handle);
@@ -159,21 +158,21 @@ uint8_t* FLASH_READ_FROM_BLOB(const char* partition_name, const char* namespace,
     return read_data;
 }
 
-static uint32_t* flash_serialize(uint8_t* input_pointer, size_t input_size, size_t* output_size)
+static uint32_t* flash_serialize(uint8_t* input_pointer, size_t input_size)
 {
-    *output_size = (input_size / 4);
+    size_t output_size = (input_size / 4);
     if(input_size % 4)
     {
-        (*output_size)++;
+        output_size++;
     }
 
-    uint32_t* output_pointer = malloc(sizeof(uint32_t)*(*output_size));
+    uint32_t* output_pointer = malloc(sizeof(uint32_t)*output_size);
 
     size_t out_iter = 0;
 
     for(size_t in_iter = 0; in_iter < input_size; in_iter++)
     {
-        if(out_iter >= *output_size)
+        if(out_iter >= output_size)
         {
             break;
         }

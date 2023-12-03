@@ -28,8 +28,18 @@ typedef enum
     ESP_ERROR_GENERIC,
     ESP_ERR_NVS_NO_FREE_PAGES,
     ESP_ERR_NVS_NEW_VERSION_FOUND,
+    ESP_ERR_NVS_READ_ONLY,
+    ESP_ERR_NVS_NOT_FOUND,
     ESP_MAX,
 } esp_err_t;
+
+struct message_t
+{
+    void* message_queue;
+    struct message_t* next_node;
+};
+
+typedef struct message_t message_node_t;
 
 typedef struct
 {
