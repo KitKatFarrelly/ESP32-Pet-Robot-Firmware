@@ -155,7 +155,7 @@ void TOF_INIT(void)
 	// Check that we are running TMF8828 firmware
 	uint8_t mode_addr = 0x10;
 	uint8_t mode_data = 0;
-	if(TOF_READ_WRITE_APP(&mode_addr, 1, &mode_data, 1, 5) == ESP_OK)
+	if(TOF_READ_WRITE_APP(&mode_data, 1, &mode_addr, 1, 5) == ESP_OK)
 	{
 		ESP_LOGI(TAG, "Mode is %x", mode_data);
 		if(mode_data == 0x00)

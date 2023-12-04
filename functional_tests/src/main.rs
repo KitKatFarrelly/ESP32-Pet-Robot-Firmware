@@ -30,6 +30,8 @@ fn main()
     appendNewTOFReadVal(&test_data, 3);
     test_data[0] = 0x00;
     appendNewTOFReadVal(&test_data, 1);
+    test_data[0] = 0x08;
+    appendNewTOFReadVal(&test_data, 1);
     unsafe
     {
         app_main();

@@ -100,7 +100,7 @@ bool setTOFReadVal(const uint8_t* read_data, size_t size)
         TOF_queue_node_t* lastNode = TOF_read_queue;
         while(lastNode->next_node != NULL)
         {
-            lastNode = TOF_read_queue->next_node;
+            lastNode = lastNode->next_node;
         }
         lastNode->next_node = malloc(sizeof(TOF_queue_node_t));
         lastNode = lastNode->next_node;
@@ -218,16 +218,28 @@ void vTaskDelay(TickType_t time_thing)
 
 esp_err_t mock_tof_read(uint8_t* TOF_OUT, uint8_t dat_size)
 {
-    memcpy(TOF_OUT, TOF_read_queue, dat_size * sizeof(uint8_t));
-    return ESP_OK;
+    if(TOF_read_queue != NULL)
+    {
+        memcpy(TOF_OUT, TOF_read_queue->ToF_data, dat_size * sizeof(uint8_t));
+        TOF_queue_node_t* temp_queue_node = TOF_read_queue->next_node;
+        free(TOF_read_queue->ToF_data);
+        free(TOF_read_queue);
+        TOF_read_queue = temp_queue_node;
+        printf("next queue item is %p", TOF_read_queue);
+        return ESP_OK;
+    }
+    else
+    {
+        return ESP_ERROR_GENERIC;
+    }
 }
 
 esp_err_t mock_tof_read_write(uint8_t* TOF_OUT, uint8_t out_dat_size, uint8_t* TOF_IN, uint8_t in_dat_size)
 {
-    printf("the following bytes were written to TOF\n");
+    printf("the following bytes were written to TOF: ");
     for(uint8_t i = 0; i < in_dat_size; i++)
     {
-        printf("%x", TOF_IN[i]);
+        printf("0x%02x ", TOF_IN[i]);
     }
     printf("\n");
     if(TOF_read_queue != NULL)
@@ -248,10 +260,10 @@ esp_err_t mock_tof_read_write(uint8_t* TOF_OUT, uint8_t out_dat_size, uint8_t* T
 
 esp_err_t mock_tof_write(uint8_t* TOF_IN, uint8_t dat_size)
 {
-    printf("the following bytes were written to TOF\n");
+    printf("the following bytes were written to TOF: ");
     for(uint8_t i = 0; i < dat_size; i++)
     {
-        printf("%x", TOF_IN[i]);
+        printf("0x%02x ", TOF_IN[i]);
     }
     printf("\n");
     return ESP_OK;
