@@ -2,10 +2,11 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
-pub mod includes;
 mod spi_flash;
 mod message_queue;
 mod tof_i2c;
+
+include!("bindings.rs");
 
 fn appendNewTOFReadVal(dat: &[u8], size: usize)
 {
@@ -18,7 +19,7 @@ fn appendNewTOFReadVal(dat: &[u8], size: usize)
     println!("");
     unsafe
     {
-        ret_bool = includes::setTOFReadVal(test_ptr, size);
+        ret_bool = setTOFReadVal(test_ptr, size);
     }
     println!("Append Data returned {}.", ret_bool);
 }
@@ -35,8 +36,11 @@ fn main()
     appendNewTOFReadVal(&test_data[..1], 1);
     test_data[0] = 0x08;
     appendNewTOFReadVal(&test_data[..1], 1);
+    let testStr = String::from("test\0");
     unsafe
     {
-        includes::app_main();
+        app_main();
+        println!("init output {}", spi_flash::initPartitionByName(&testStr));
+        println!("erase output {}", spi_flash::erasePartitionByName(&testStr));
     }
 }

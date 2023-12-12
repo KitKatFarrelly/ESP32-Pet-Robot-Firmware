@@ -24,7 +24,7 @@ typedef struct
 struct TOF_queue_t
 {
     uint8_t* ToF_data;
-    struct message_t* next_node;
+    struct TOF_queue_t* next_node;
 };
 
 typedef struct TOF_queue_t TOF_queue_node_t;
@@ -280,9 +280,13 @@ esp_err_t nvs_flash_erase_partition(const char* partition_name)
     printf("Erasing %s\n", partition_name);
     for(int i = 0; i < MAX_BLOBS; i++)
     {
-        free(blob_array[i].blob_name);
-        free(blob_array[i].blob);
-        blob_array[i].blob_size = 0;
+        if(blob_array[i].blob_name != NULL && blob_array[i].blob != NULL)
+        {
+            free(blob_array[i].blob_name);
+            free(blob_array[i].blob);
+            blob_array[i].blob_size = 0;
+        }
+        
     }
     return ESP_OK;
 }
@@ -290,7 +294,9 @@ esp_err_t nvs_flash_erase_partition(const char* partition_name)
 esp_err_t nvs_get_stats(const char* partition_name, nvs_stats_t* stats_handle)
 {
     printf("Printing stats for %s\n", partition_name);
-    stats_handle = NULL;
+    stats_handle->total_entries = 0;
+    stats_handle->used_entries = 0;
+    stats_handle->free_entries = 0;
     return ESP_OK;
 }
 

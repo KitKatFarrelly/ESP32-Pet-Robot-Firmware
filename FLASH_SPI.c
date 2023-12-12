@@ -93,7 +93,7 @@ size_t FLASH_DOES_KEY_EXIST(const char* partition_name, const char* namespace, c
     return required_size;
 }
 
-uint8_t FLASH_WRITE_TO_BLOB(const char* partition_name, const char* namespace, const char* blob_name, uint8_t* data, size_t size)
+uint8_t FLASH_WRITE_TO_BLOB(const char* partition_name, const char* namespace, const char* blob_name, const uint8_t* data, size_t size)
 {
     nvs_handle_t write_handle;
     esp_err_t err;
@@ -158,7 +158,7 @@ uint8_t* FLASH_READ_FROM_BLOB(const char* partition_name, const char* namespace,
     return read_data;
 }
 
-static uint32_t* flash_serialize(uint8_t* input_pointer, size_t input_size)
+static uint32_t* flash_serialize(const uint8_t* input_pointer, size_t input_size)
 {
     size_t output_size = (input_size / 4);
     if(input_size % 4)
