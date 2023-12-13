@@ -108,18 +108,6 @@ mod tests
     }
 
     #[test]
-    fn test_write_new_key()
-    {
-
-    }
-
-    #[test]
-    fn test_read_key_does_exist()
-    {
-
-    }
-
-    #[test]
     fn test_read_write_key_does_exist()
     {
         let input_list = vec![1,4,6,0xF,0xE,2,5,0];
