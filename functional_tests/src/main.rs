@@ -36,11 +36,8 @@ fn main()
     appendNewTOFReadVal(&test_data[..1], 1);
     test_data[0] = 0x08;
     appendNewTOFReadVal(&test_data[..1], 1);
-    let testStr = String::from("test\0");
     unsafe
     {
         app_main();
-        println!("init output {}", spi_flash::initPartitionByName(&testStr));
-        println!("erase output {}", spi_flash::erasePartitionByName(&testStr));
     }
 }

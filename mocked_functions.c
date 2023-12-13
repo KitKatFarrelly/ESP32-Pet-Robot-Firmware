@@ -33,7 +33,9 @@ static TaskType_t task_array[MAX_TASK_REGISTRATIONS] = {0};
 
 static TOF_queue_node_t* TOF_read_queue = NULL;
 
-static nvs_handle_t current_handle = 0;
+static nvs_handle_t* current_handle = NULL;
+
+static nvs_handle_t handle_iter = 0;
 
 static bool can_write = 0;
 
@@ -303,22 +305,26 @@ esp_err_t nvs_get_stats(const char* partition_name, nvs_stats_t* stats_handle)
 esp_err_t nvs_open_from_partition(const char* partition_name, const char* namespace_var, bool canWrite, nvs_handle_t* handle_ptr)
 {
     printf("Opening for %s with namespace %s\n", partition_name, namespace_var);
-    current_handle++;
-    if(current_handle > 99)
+    handle_iter++;
+    if(handle_iter > 99)
     {
-        current_handle = 0;
+        handle_iter = 0;
     }
     can_write = canWrite;
-    *handle_ptr = current_handle;
+    current_handle = malloc(sizeof(nvs_handle_t));
+    *current_handle = handle_iter;
+    handle_ptr = current_handle;
     return ESP_OK;
 }
 
 esp_err_t nvs_close(nvs_handle_t handle)
 {
-    if(handle != current_handle)
+    if(handle != *current_handle)
     {
         return ESP_ERROR_GENERIC;
     }
+    free(current_handle);
+    current_handle = NULL;
     return ESP_OK;
 }
 
