@@ -302,7 +302,7 @@ esp_err_t nvs_get_stats(const char* partition_name, nvs_stats_t* stats_handle)
 
 esp_err_t nvs_open_from_partition(const char* partition_name, const char* namespace_var, bool canWrite, nvs_handle_t* handle_ptr)
 {
-    printf("Opening for %s with namespace %s, handle ptr %u\n", partition_name, namespace_var, *handle_ptr);
+    printf("Opening for %s with namespace %s\n", partition_name, namespace_var);
     current_handle++;
     if(current_handle > 99)
     {
@@ -337,7 +337,7 @@ esp_err_t nvs_get_blob(nvs_handle_t handle, const char* blob_name, uint8_t* seri
                 printf("found blob %s at iter %u\n", blob_array[i].blob_name, i);
                 if(serial_data != NULL)
                 {
-                    serial_data = blob_array[i].blob;
+                    memcpy(serial_data, blob_array[i].blob, *serial_size);
                 }
                 *serial_size = blob_array[i].blob_size;
                 return ESP_OK;

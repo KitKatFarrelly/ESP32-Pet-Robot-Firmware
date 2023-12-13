@@ -126,6 +126,7 @@ uint8_t* FLASH_READ_FROM_BLOB(const char* partition_name, const char* namespace,
     if (err != ESP_OK) 
     {
         nvs_close(read_handle);
+        free(read_data);
         ESP_LOGE(TAG, "unable to open partition.");
         return NULL;
     }
@@ -135,6 +136,7 @@ uint8_t* FLASH_READ_FROM_BLOB(const char* partition_name, const char* namespace,
     if (err != ESP_OK) 
     {
         nvs_close(read_handle);
+        free(read_data);
         ESP_LOGE(TAG, "could not read from blob.");
         return NULL;
     }

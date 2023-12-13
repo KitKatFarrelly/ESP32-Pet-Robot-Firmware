@@ -1,3 +1,5 @@
+use std::slice;
+
 pub fn initPartitionByName(s: &str) -> u8
 {
     let strPtr = s.as_ptr() as *const i8;
@@ -62,9 +64,9 @@ pub fn readBlobFromKey(partition: &str, namespace: &str, blob: &str, size: usize
     let blobPtr = blob.as_ptr() as *const i8;
     unsafe
     {
-        let blobData = crate::FLASH_READ_FROM_BLOB(partPtr, nmPtr, blobPtr, size);
-        let blobSlice = Vec::from_raw_parts(blobData, size, size);
-        blobSlice
+        let blobData = crate::FLASH_READ_FROM_BLOB(partPtr, nmPtr, blobPtr, size) as *const u8;
+        let blobVec = slice::from_raw_parts(blobData, size).to_vec();
+        blobVec
     }
 }
 
@@ -98,12 +100,6 @@ mod tests
         let output_vec = readBlobFromKey(test_partition, test_namespace, test_blob_1, key_size);
 
         let vec_iter = output_vec.iter();
-        print!("TEST LOG: Vector output is ");
-        for x in vec_iter
-        {
-            print!("{} ", x);
-        }
-        println!("");
         assert_eq!(0, output_vec.len());
     }
 
@@ -111,6 +107,7 @@ mod tests
     fn test_read_write_key_does_exist()
     {
         let input_list = vec![1,4,6,0xF,0xE,2,5,0];
+        let input_copy = input_list.clone();
 
         let input_len = input_list.len();
 
@@ -120,14 +117,9 @@ mod tests
         assert_eq!(input_len, key_size);
         let output_vec = readBlobFromKey(test_partition, test_namespace, test_blob_1, key_size);
 
-        let vec_iter = output_vec.iter();
-        print!("TEST LOG: Vector output is ");
-        for x in vec_iter
-        {
-            print!("{} ", x);
-        }
-        println!("");
         assert_eq!(input_len, output_vec.len());
+        let vec_iter = output_vec.iter();
+        assert!(input_copy == output_vec);
     }
 
     #[test]
