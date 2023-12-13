@@ -122,7 +122,24 @@ mod tests
     #[test]
     fn test_read_write_key_does_exist()
     {
+        let input_list = vec![1,4,6,0xF,0xE,2,5,0];
 
+        let input_len = input_list.len();
+
+        assert_eq!(0, writeBlobToKey(test_partition, test_namespace, test_blob_1, input_list, input_len));
+        
+        let key_size = askIfKeyExists(test_partition, test_namespace, test_blob_1);
+        assert_eq!(input_len, key_size);
+        let output_vec = readBlobFromKey(test_partition, test_namespace, test_blob_1, key_size);
+
+        let vec_iter = output_vec.iter();
+        print!("TEST LOG: Vector output is ");
+        for x in vec_iter
+        {
+            print!("{} ", x);
+        }
+        println!("");
+        assert_eq!(input_len, output_vec.len());
     }
 
     #[test]

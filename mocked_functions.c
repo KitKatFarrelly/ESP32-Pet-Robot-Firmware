@@ -16,7 +16,7 @@ typedef struct
 
 typedef struct
 {
-    uint32_t* blob;
+    uint8_t* blob;
     size_t blob_size;
     char* blob_name;
 } BlobType_t;
@@ -33,9 +33,7 @@ static TaskType_t task_array[MAX_TASK_REGISTRATIONS] = {0};
 
 static TOF_queue_node_t* TOF_read_queue = NULL;
 
-static nvs_handle_t* current_handle = NULL;
-
-static nvs_handle_t handle_iter = 0;
+static nvs_handle_t current_handle = 0;
 
 static bool can_write = 0;
 
@@ -304,31 +302,27 @@ esp_err_t nvs_get_stats(const char* partition_name, nvs_stats_t* stats_handle)
 
 esp_err_t nvs_open_from_partition(const char* partition_name, const char* namespace_var, bool canWrite, nvs_handle_t* handle_ptr)
 {
-    printf("Opening for %s with namespace %s\n", partition_name, namespace_var);
-    handle_iter++;
-    if(handle_iter > 99)
+    printf("Opening for %s with namespace %s, handle ptr %u\n", partition_name, namespace_var, *handle_ptr);
+    current_handle++;
+    if(current_handle > 99)
     {
-        handle_iter = 0;
+        current_handle = 0;
     }
     can_write = canWrite;
-    current_handle = malloc(sizeof(nvs_handle_t));
-    *current_handle = handle_iter;
-    handle_ptr = current_handle;
+    *handle_ptr = current_handle;
     return ESP_OK;
 }
 
 esp_err_t nvs_close(nvs_handle_t handle)
 {
-    if(handle != *current_handle)
+    if(handle != current_handle)
     {
         return ESP_ERROR_GENERIC;
     }
-    free(current_handle);
-    current_handle = NULL;
     return ESP_OK;
 }
 
-esp_err_t nvs_get_blob(nvs_handle_t handle, const char* blob_name, uint32_t* serial_data, size_t* serial_size)
+esp_err_t nvs_get_blob(nvs_handle_t handle, const char* blob_name, uint8_t* serial_data, size_t* serial_size)
 {
     if(handle != current_handle)
     {
@@ -336,21 +330,24 @@ esp_err_t nvs_get_blob(nvs_handle_t handle, const char* blob_name, uint32_t* ser
     }
     for(int i = 0; i < MAX_BLOBS; i++)
     {
-        if(!strcmp(blob_name, blob_array[i].blob_name))
+        if(blob_array[i].blob_name != NULL)
         {
-            printf("found blob %s at iter %u\n", blob_array[i].blob_name, i);
-            if(serial_data != NULL)
+            if(!strcmp(blob_name, blob_array[i].blob_name))
             {
-                serial_data = blob_array[i].blob;
+                printf("found blob %s at iter %u\n", blob_array[i].blob_name, i);
+                if(serial_data != NULL)
+                {
+                    serial_data = blob_array[i].blob;
+                }
+                *serial_size = blob_array[i].blob_size;
+                return ESP_OK;
             }
-            *serial_size = blob_array[i].blob_size;
-            return ESP_OK;
         }
     }
     return ESP_ERR_NVS_NOT_FOUND;
 }
 
-esp_err_t nvs_set_blob(nvs_handle_t handle, const char* blob_name, uint32_t* serial_data, size_t serial_size)
+esp_err_t nvs_set_blob(nvs_handle_t handle, const char* blob_name, uint8_t* serial_data, size_t serial_size)
 {
     if(handle != current_handle)
     {
@@ -363,15 +360,18 @@ esp_err_t nvs_set_blob(nvs_handle_t handle, const char* blob_name, uint32_t* ser
     uint8_t lowest_empty_blob = 0;
     for(int i = 0; i < MAX_BLOBS; i++)
     {
-        if(!strcmp(blob_name, blob_array[i].blob_name))
+        if(blob_array[i].blob_name != NULL)
         {
-            printf("found blob %s at iter %u\n", blob_array[i].blob_name, i);
-            free(blob_array[i].blob);
-            free(blob_array[i].blob_name);
-            lowest_empty_blob = i;
-            break;
+            if(!strcmp(blob_name, blob_array[i].blob_name))
+            {
+                printf("found blob %s at iter %u\n", blob_array[i].blob_name, i);
+                free(blob_array[i].blob);
+                free(blob_array[i].blob_name);
+                lowest_empty_blob = i;
+                break;
+            }
         }
-        else if(lowest_empty_blob == i)
+        if(lowest_empty_blob == i)
         {
             if(blob_array[i].blob_size > 0)
             {
@@ -382,7 +382,7 @@ esp_err_t nvs_set_blob(nvs_handle_t handle, const char* blob_name, uint32_t* ser
     if(lowest_empty_blob < MAX_BLOBS)
     {
         printf("writing blob %s at iter %u\n", blob_name, lowest_empty_blob);
-        blob_array[lowest_empty_blob].blob = malloc(((serial_size / 4) + 1) * sizeof(uint32_t));
+        blob_array[lowest_empty_blob].blob = malloc((serial_size + 1) * sizeof(uint8_t));
         memcpy(blob_array[lowest_empty_blob].blob, serial_data, serial_size);
         blob_array[lowest_empty_blob].blob_name = malloc(sizeof(blob_name) + 1);
         strcpy(blob_array[lowest_empty_blob].blob_name, blob_name);
