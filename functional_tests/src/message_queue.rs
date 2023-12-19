@@ -1,14 +1,14 @@
-fn testMessageHandlerOne()
+unsafe extern "C" fn testMessageHandlerOne(compHandle: component_handle_t, msg_type: u8, msg_data: *mut ::std::os::raw::c_void)
 {
     //this should be used to handle test functions
 }
 
-fn testMessageHandlerTwo()
+unsafe extern "C" fn testMessageHandlerTwo(compHandle: component_handle_t, msg_type: u8, msg_data: *mut ::std::os::raw::c_void)
 {
     //this should be used to handle test functions
 }
 
-fn testMessageHandlerThree()
+unsafe extern "C" fn testMessageHandlerThree(compHandle: component_handle_t, msg_type: u8, msg_data: *mut ::std::os::raw::c_void)
 {
     //this should be used to handle test functions
 }
@@ -54,16 +54,70 @@ pub fn removeTestComponentHandle(compHandle: component_handle_t) -> u8
     retVal
 }
 
-//TODO
+pub fn registerTestHandlerNormal(handler: u8, compHandle: component_handle_t) -> callback_handle_t
+{
+    match(handler)
+    {
+        1|_ => let funcPtr = testMessageHandlerOne;
+        2 => let funcPtr = testMessageHandlerTwo;
+        3 => let funcPtr = testMessageHandlerThree;
+    }
+    let retCall = unsafe { crate::register_component_handler_for_messages(funcPtr, compHandle); };
+    retCall
+}
 
-callback_handle_t register_component_handler_for_messages(void (*func_ptr)(component_handle_t, uint8_t, void*), component_handle_t handle);
+pub fn unregisterTestHandlerNormal(compHandle: component_handle_t, callHandle: callback_handle_t) -> u8
+{
+    let retVal = unsafe { unregister_component_handler_for_messages(compHandle, callHandle); };
+    retVal
+}
 
-uint8_t unregister_component_handler_for_messages(component_handle_t handle, callback_handle_t function_handle);
+pub fn createNewMessageNormal(type: u8, compHandle: component_handle_t, data: &str) -> u8
+{
+    let mut mutData = message_info_t
+    {
+        message_type = type;
+        component_handle = compHandle;
+        message_data = data.as_ptr() as *mut c_void;
+    };
 
-uint8_t send_message_to_normal_queue(message_info_t message_info);
+    let retVal = unsafe { send_message_to_normal_queue(mutData); };
+    retVal
+}
 
-callback_handle_t register_priority_handler_for_messages(void (*func_ptr)(component_handle_t, uint8_t, void*), component_handle_t handle);
+pub fn registerTestHandlerPriority(handler: u8, compHandle: component_handle_t) -> callback_handle_t
+{
+    match(handler)
+    {
+        1|_ => let funcPtr = testMessageHandlerOne;
+        2 => let funcPtr = testMessageHandlerTwo;
+        3 => let funcPtr = testMessageHandlerThree;
+    }
+    let retCall = unsafe { crate::register_priority_handler_for_messages(funcPtr, compHandle); };
+    retCall
+}
 
-uint8_t unregister_priority_handler_for_messages(component_handle_t handle, callback_handle_t function_handle);
+pub fn unregisterTestHandlerPriority(compHandle: component_handle_t, callHandle: callback_handle_t) -> u8
+{
+    let retVal = unsafe { unregister_priority_handler_for_messages(compHandle, callHandle); };
+    retVal
+}
 
-uint8_t send_message_to_priority_queue(message_info_t message_info);
+pub fn createNewMessagePriority(type: u8, compHandle: component_handle_t, data: &str) -> u8
+{
+    let mut mutData = message_info_t
+    {
+        message_type = type;
+        component_handle = compHandle;
+        message_data = data.as_ptr() as *mut c_void;
+    };
+
+    let retVal = unsafe { send_message_to_priority_queue(mutData); };
+    retVal
+}
+
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+}
