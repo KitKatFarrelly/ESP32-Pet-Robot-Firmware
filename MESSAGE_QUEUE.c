@@ -18,7 +18,7 @@
 
 struct callback_node_t
 {
-    void (*callback_ptr)(component_handle_t, uint8_t, void*);
+    void (*callback_ptr)(component_handle_t, uint8_t, void*, size_t);
     struct callback_node_t* next_handler;
     callback_handle_t callback_handle;
 };
@@ -319,7 +319,7 @@ static void normal_queue_loop(void* args)
             }
             while(callback_iter != NULL)
             {
-                (*(callback_iter->callback_ptr))(message_info.component_handle, message_info.message_type, message_info.message_data);
+                (*(callback_iter->callback_ptr))(message_info.component_handle, message_info.message_type, message_info.message_data, message_info.message_size);
                 callback_iter = callback_iter->next_handler;
             }
             free(message_info.message_data);
@@ -342,7 +342,7 @@ static void priority_queue_loop(void* args)
             }
             while(callback_iter != NULL)
             {
-                (*(callback_iter->callback_ptr))(message_info.component_handle, message_info.message_type, message_info.message_data);
+                (*(callback_iter->callback_ptr))(message_info.component_handle, message_info.message_type, message_info.message_data, message_info.message_size);
                 callback_iter = callback_iter->next_handler;
             }
             free(message_info.message_data);
