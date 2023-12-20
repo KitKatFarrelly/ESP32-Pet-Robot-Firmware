@@ -84,9 +84,10 @@ pub fn registerTestHandlerNormal(handler: u8, compHandle: component_handle_t) ->
     
     match handler
     {
-        1|_ => funcPtr = Some(testMessageHandlerOne),
+        1 => funcPtr = Some(testMessageHandlerOne),
         2 => funcPtr = Some(testMessageHandlerTwo),
         3 => funcPtr = Some(testMessageHandlerThree),
+        _ => funcPtr = None,
     }
     let retCall = unsafe { crate::register_component_handler_for_messages(funcPtr, compHandle) };
     retCall
@@ -118,9 +119,10 @@ pub fn registerTestHandlerPriority(handler: u8, compHandle: component_handle_t) 
     
     match handler
     {
-        1|_ => funcPtr = Some(testMessageHandlerOne),
+        1 => funcPtr = Some(testMessageHandlerOne),
         2 => funcPtr = Some(testMessageHandlerTwo),
         3 => funcPtr = Some(testMessageHandlerThree),
+        _ => funcPtr = None,
     }
     let retCall = unsafe { crate::register_priority_handler_for_messages(funcPtr, compHandle) };
     retCall
@@ -150,4 +152,22 @@ pub fn createNewMessagePriority(msg_type: u8, compHandle: component_handle_t, da
 mod tests
 {
     use super::*;
+
+    #[test]
+    fn test_normal_queue()
+    {
+
+    }
+
+    #[test]
+    fn test_priority_queue()
+    {
+        
+    }
+
+    #[test]
+    fn test_both_queues()
+    {
+        
+    }
 }
