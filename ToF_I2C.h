@@ -8,6 +8,12 @@ typedef struct
     uint8_t vertical_size;
 } TOF_DATA_t;
 
+typedef enum
+{
+    TOF_MSG_INTERNAL_CONVERT_I2C,
+    TOF_MSG_MAX,
+} TOF_MESSAGE_TYPES_t;
+
 // Initializes firmware on TOF sensor.
 void TOF_INIT(void);
 

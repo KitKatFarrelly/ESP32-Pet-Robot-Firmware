@@ -184,7 +184,7 @@ uint8_t delete_handle_for_component(component_handle_t handle)
     return 0;
 }
 
-callback_handle_t register_component_handler_for_messages(void (*func_ptr)(component_handle_t, uint8_t, void*), component_handle_t handle)
+callback_handle_t register_component_handler_for_messages(void (*func_ptr)(component_handle_t, uint8_t, void*, size_t), component_handle_t handle)
 {
     callback_handle_t return_handle = 0;
     if(normal_queue_handlers[handle].is_component_registered && normal_queue_active)
@@ -254,7 +254,7 @@ uint8_t send_message_to_normal_queue(message_info_t message_info)
     return 0;
 }
 
-callback_handle_t register_priority_handler_for_messages(void (*func_ptr)(component_handle_t, uint8_t, void*), component_handle_t handle)
+callback_handle_t register_priority_handler_for_messages(void (*func_ptr)(component_handle_t, uint8_t, void*, size_t), component_handle_t handle)
 {
     callback_handle_t return_handle = 0;
     if(priority_queue_handlers[handle].is_component_registered && priority_queue_active)
@@ -342,7 +342,10 @@ static void normal_queue_loop(void* args)
                 (*(callback_iter->callback_ptr))(message_info.component_handle, message_info.message_type, message_info.message_data, message_info.message_size);
                 callback_iter = callback_iter->next_handler;
             }
-            free(message_info.message_data);
+            if(message_info.message_data != NULL)
+            {
+                free(message_info.message_data);
+            }
         }
         else
         {
@@ -373,7 +376,10 @@ static void priority_queue_loop(void* args)
                 (*(callback_iter->callback_ptr))(message_info.component_handle, message_info.message_type, message_info.message_data, message_info.message_size);
                 callback_iter = callback_iter->next_handler;
             }
-            free(message_info.message_data);
+            if(message_info.message_data != NULL)
+            {
+                free(message_info.message_data);
+            }
         }
         else
         {

@@ -108,8 +108,8 @@ esp_err_t nvs_open_from_partition(const char* partition_name, const char* namesp
 
 esp_err_t nvs_close(nvs_handle_t handle);
 
-esp_err_t nvs_get_blob(nvs_handle_t handle, const char* blob_name, uint32_t* serial_data, size_t* serial_size);
+esp_err_t nvs_get_blob(nvs_handle_t handle, const char* blob_name, uint8_t* serial_data, size_t* serial_size);
 
-esp_err_t nvs_set_blob(nvs_handle_t handle, const char* blob_name, uint32_t* serial_data, size_t serial_size);
+esp_err_t nvs_set_blob(nvs_handle_t handle, const char* blob_name, uint8_t* serial_data, size_t serial_size);
 
 #endif

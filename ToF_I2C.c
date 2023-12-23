@@ -33,6 +33,8 @@
 //Defines
 
 #define FW_HEADER_LEN 4
+#define MEASUREMENT_BUF_SIZE 8
+#define MEASUREMENT_DAT_SIZE 0x84
 
 #define tmf8821_fac_cal		"tmf8821_fac"
 #define tmf8828_fac_cal_1	"tmf8828_fac_1"
@@ -70,23 +72,23 @@ static bool s_is_tmf8828_mode = false;
 static TOF_DATA_t* s_ring_buffer_ptr = NULL;
 static uint8_t s_ring_buffer_size = 0;
 static uint8_t s_measurement_iter = 0;
-static uint8_t s_measurement_buffer[4][132] = {0};
+static uint8_t s_starting_iter = 0;
+static uint8_t s_measurement_buffer[MEASUREMENT_BUF_SIZE][MEASUREMENT_DAT_SIZE] = {0};
 static uint8_t s_measurement_flags = 0;
 static uint8_t s_current_config = 0;
+static component_handle_t s_internal_comp_handle = 0;
 
 // Interrupt Handler
 
 static void TOF_MEASUREMENT_INTR_HANDLE(void* arg);
 
-/* TO DO
 // Task Handling
 
 // Message Handler
-static void TOF_MESSAGE_HANDLER(void);
+static void TOF_INTERNAL_MESSAGE_HANDLER(component_handle_t comp_handle, uint8_t internal_msg_type, void* data, size_t data_len);
 
 // Task to Convert Read Buffer to a distance array
 static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void);
-*/
 
 
 void TOF_INIT(void)
@@ -142,10 +144,17 @@ void TOF_INIT(void)
 	s_ring_buffer_ptr = NULL;
 	s_ring_buffer_size = 0;
 	s_measurement_iter = 0;
+	s_starting_iter = 0;
 	s_measurement_flags = 0;
 	s_current_config = 0;
 
 #endif
+
+	if(check_is_queue_active(1))
+	{
+		create_handle_for_component(&s_internal_comp_handle);
+		register_priority_handler_for_messages(TOF_INTERNAL_MESSAGE_HANDLER, s_internal_comp_handle);
+	}
 	
 	if(!TOF_FIRMWARE_CHECK())
 	{
@@ -169,6 +178,7 @@ void TOF_INIT(void)
 
 #ifndef FUNCTIONAL_TESTS
 	//TOF INTERRUPT HANDLER
+	//TODO: functional test for isr
 	gpio_isr_handler_add(TOF_INTR, TOF_MEASUREMENT_INTR_HANDLE, NULL);
 #endif
 }
@@ -768,19 +778,69 @@ static uint8_t TOF_CHECK_REGISTERS(uint8_t* read_reg, uint8_t* comp_reg, uint8_t
 	return mismatched_reg_count;
 }
 
-/* Still need to implement sending and receiving messages
-
-static void TOF_MESSAGE_HANDLER(void)
+static void TOF_INTERNAL_MESSAGE_HANDLER(component_handle_t comp_handle, uint8_t internal_msg_type, void* data, size_t data_len)
 {
-	
+	if(comp_handle != s_internal_comp_handle)
+	{
+		ESP_LOGE(TAG, "Invalid comp handle %u.", comp_handle);
+		return;
+	}
+	switch((TOF_MESSAGE_TYPES_t) internal_msg_type)
+	{
+		case TOF_MSG_INTERNAL_CONVERT_I2C:
+			TOF_CONVERT_READ_BUFFER_TO_ARRAY();
+			break;
+		case TOF_MSG_MAX:
+		default:
+			ESP_LOGE(TAG, "Invalid tof message type %u.", internal_msg_type);
+			break;
+	}
 }
 
 static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 {
+	uint8_t number_of_measurements = (s_is_tmf8828_mode) ? 4 : 1;
+
+	//temporarily using this just to check that we have enough data
+	uint8_t ending_iter = s_measurement_iter;
+	
+	if(ending_iter <= s_starting_iter)
+	{
+		ending_iter += MEASUREMENT_BUF_SIZE;
+	}
+
+	if(ending_iter - s_starting_iter < number_of_measurements)
+	{
+		return 1;
+	}
+
+	//Do the actual conversion here
+	ending_iter = s_starting_iter + number_of_measurements;
+	if(ending_iter >= MEASUREMENT_BUF_SIZE)
+	{
+		ending_iter -= MEASUREMENT_BUF_SIZE;
+	}
+
+	for(uint8_t i = s_starting_iter; i == ending_iter; i++)
+	{
+		if(i >= MEASUREMENT_BUF_SIZE)
+		{
+			i = 0;
+		}
+		//convert i2c data to depth pixel grid
+
+		//clear flag at buffer location so it can be used
+		s_measurement_flags &= ~(1 << i);
+	}
+	
+
+	s_starting_iter += number_of_measurements;
+	if(s_starting_iter >= MEASUREMENT_BUF_SIZE)
+	{
+		s_starting_iter -= MEASUREMENT_BUF_SIZE;
+	}
 	return 0;
 }
-
-*/
 
 static void TOF_MEASUREMENT_INTR_HANDLE(void* arg)
 {
@@ -791,6 +851,7 @@ static void TOF_MEASUREMENT_INTR_HANDLE(void* arg)
 	// Steps:
 
 	//Exit early if we are overwriting the buffer
+	//Should kick off a timer to retry handler at regular intervals
 	if(s_measurement_flags & (0x01 << s_measurement_iter)) return;
 
 	//Read Interrupt Settings
@@ -802,24 +863,33 @@ static void TOF_MEASUREMENT_INTR_HANDLE(void* arg)
 	
 	// Read out Measurement
 	write_data[0] = 0x20;
-	if(!TOF_READ_WRITE_APP(write_data, 1, s_measurement_buffer[s_measurement_iter], 132, 1) == ESP_OK) return;
+	if(!TOF_READ_WRITE_APP(write_data, 1, s_measurement_buffer[s_measurement_iter], MEASUREMENT_DAT_SIZE, 1) == ESP_OK) return;
 
 	//Set flags for buffers
-	s_measurement_flags &= (1 << s_measurement_iter);
+	s_measurement_flags |= (1 << s_measurement_iter);
 
 	s_measurement_iter++;
 
-	if(s_measurement_iter >= number_of_measurements)
+	if(s_measurement_iter >= MEASUREMENT_BUF_SIZE)
 	{
 		s_measurement_iter = 0;
+	}
+
+	//Queue Message to Process Read Buffer
+	if(check_is_queue_active(1))
+	{
+		message_info_t convert_i2c_msg;
+		convert_i2c_msg.message_data=NULL;
+		convert_i2c_msg.message_size=0;
+		convert_i2c_msg.component_handle=s_internal_comp_handle;
+		convert_i2c_msg.message_type=TOF_MSG_INTERNAL_CONVERT_I2C;
+		send_message_to_priority_queue(convert_i2c_msg);
 	}
 
 	//Clear pending interrupts
 	write_data[0] = 0xE1;
 	write_data[1] = 0x02;
 	if(TOF_WRITE_APP(write_data, 2, 1) != ESP_OK) return;
-
-	//Queue Message to Process Read Buffer
 
 	ESP_LOGI(TAG, "Read measurement successfully.");
 }
