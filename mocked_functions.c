@@ -53,7 +53,7 @@ bool spinQueueTaskOnce(const char* name)
         return false;
     }
     printf("spinning task %s\n", task_array[task_array_iterator].name);
-    (*(task_array[task_array_iterator].func_ptr))(NULL);
+    (*(task_array[task_array_iterator].func_ptr))(name);
     return true;
 }
 
@@ -112,15 +112,25 @@ bool setTOFReadVal(const uint8_t* read_data, size_t size)
     return true;
 }
 
+void* createVoidPtr(const char* str, size_t len)
+{
+    void* retPtr = malloc(len * sizeof(char));
+    memcpy(retPtr, str, len * sizeof(char));
+    return retPtr;
+}
+
 static uint8_t getTaskFromName(const char* name)
 {
     printf("searching for task %s\n", name);
     for(int i = 0; i < MAX_TASK_REGISTRATIONS; i++)
     {
-        if(!strcmp(name, task_array[i].name))
+        if(task_array[i].name != NULL)
         {
-            printf("found task %s at iter %u\n", name, i);
-            break;
+            if(!strcmp(name, task_array[i].name))
+            {
+                printf("found task %s at iter %u\n", name, i);
+                return i;
+            }
         }
     }
     return MAX_TASK_REGISTRATIONS;
@@ -185,8 +195,8 @@ bool xQueueSend(QueueHandle_t queue_ptr, void* message_info, TickType_t time_thi
         queue_ptr->message_queue_start = malloc(sizeof(message_node_t));
         lastNode = queue_ptr->message_queue_start;
     }
-    lastNode->message_queue = malloc(sizeof(queue_ptr->data_type_length));
-    memcpy(lastNode->message_queue, message_info, sizeof(queue_ptr->data_type_length));
+    lastNode->message_queue = malloc(queue_ptr->data_type_length);
+    memcpy(lastNode->message_queue, message_info, queue_ptr->data_type_length);
     lastNode->next_node = NULL;
     printf("appended message at %p\n", lastNode);
     return true;
@@ -204,7 +214,7 @@ bool xQueueReceive(QueueHandle_t queue_ptr, void* message_info, TickType_t time_
     }
     printf("received message at %p\n", queue_ptr->message_queue_start);
     message_node_t* nextNode = queue_ptr->message_queue_start->next_node;
-    memcpy(message_info, queue_ptr->message_queue_start->message_queue, sizeof(queue_ptr->data_type_length));
+    memcpy(message_info, queue_ptr->message_queue_start->message_queue, queue_ptr->data_type_length);
     free(queue_ptr->message_queue_start->message_queue);
     free(queue_ptr->message_queue_start);
     queue_ptr->message_queue_start = nextNode;

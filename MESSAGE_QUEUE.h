@@ -19,6 +19,8 @@ void MESSAGE_QUEUE_INIT(void);
 
 void PRIORITY_MESSAGE_QUEUE_INIT(void);
 
+void uninit_queue(uint8_t queuetype);
+
 bool check_is_queue_active(uint8_t queuetype);
 
 uint8_t clear_all_handles(void);

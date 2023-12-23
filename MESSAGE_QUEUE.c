@@ -63,6 +63,29 @@ void PRIORITY_MESSAGE_QUEUE_INIT(void)
     xTaskCreate(priority_queue_loop, "priority_queue", 2048, NULL, 10, NULL);
 }
 
+void uninit_queue(uint8_t queuetype)
+{
+    switch (queuetype)
+    {
+    case 0:
+        normal_queue_active = false;
+#ifdef FUNCTIONAL_TESTS
+        deleteTask("normal_queue");
+        deleteQueue(normal_message_queue);
+#endif
+        break;
+    case 1:
+        priority_queue_active = false;
+#ifdef FUNCTIONAL_TESTS
+        deleteTask("priority_queue");
+        deleteQueue(priority_message_queue);
+#endif
+        break;
+    default:
+        break;
+    }
+}
+
 bool check_is_queue_active(uint8_t queuetype)
 {
     switch (queuetype)
@@ -96,7 +119,7 @@ uint8_t create_handle_for_component(component_handle_t* handle)
     {
         return 1;
     }
-    if(queue_handle_cnt < MAX_COMPONENT_REGISTRATIONS)
+    if(queue_handle_cnt >= MAX_COMPONENT_REGISTRATIONS)
     {
         return 2;
     }
@@ -127,7 +150,7 @@ uint8_t delete_handle_for_component(component_handle_t handle)
 {
     callback_handler_t* handler_ptr = NULL;
     callback_handler_t* next_ptr = NULL;
-    if(!normal_queue_active || !priority_queue_active)
+    if(!normal_queue_active && !priority_queue_active)
     {
         return 1;
     }
@@ -153,7 +176,10 @@ uint8_t delete_handle_for_component(component_handle_t handle)
         }
         priority_queue_handlers[handle].is_component_registered = false;
     }
-    lowest_unregistered_queue_handle = handle;
+    if(handle < lowest_unregistered_queue_handle)
+    {
+        lowest_unregistered_queue_handle = handle;
+    }
     queue_handle_cnt--;
     return 0;
 }
@@ -204,16 +230,13 @@ uint8_t unregister_component_handler_for_messages(component_handle_t handle, cal
     {
         if(handler_iter->callback_handle == function_handle)
         {
-            if(handler_iter->next_handler != NULL)
+            if(prev_handler_iter != NULL)
             {
-                if(prev_handler_iter != NULL)
-                {
-                    prev_handler_iter->next_handler = handler_iter->next_handler;
-                }
-                else
-                {
-                    normal_queue_handlers[handle].callback_list_start = handler_iter->next_handler;
-                }
+                prev_handler_iter->next_handler = handler_iter->next_handler;
+            }
+            else
+            {
+                normal_queue_handlers[handle].callback_list_start = handler_iter->next_handler;
             }
             free(handler_iter);
             return 0;
@@ -277,16 +300,13 @@ uint8_t unregister_priority_handler_for_messages(component_handle_t handle, call
     {
         if(handler_iter->callback_handle == function_handle)
         {
-            if(handler_iter->next_handler != NULL)
+            if(prev_handler_iter != NULL)
             {
-                if(prev_handler_iter != NULL)
-                {
-                    prev_handler_iter->next_handler = handler_iter->next_handler;
-                }
-                else
-                {
-                    priority_queue_handlers[handle].callback_list_start = handler_iter->next_handler;
-                }
+                prev_handler_iter->next_handler = handler_iter->next_handler;
+            }
+            else
+            {
+                priority_queue_handlers[handle].callback_list_start = handler_iter->next_handler;
             }
             free(handler_iter);
             return 0;
@@ -324,6 +344,14 @@ static void normal_queue_loop(void* args)
             }
             free(message_info.message_data);
         }
+        else
+        {
+            vTaskDelay(1 / portTICK_PERIOD_MS);
+        }
+        if(args != NULL)
+        {
+            break;
+        }
     }
 }
 
@@ -346,6 +374,14 @@ static void priority_queue_loop(void* args)
                 callback_iter = callback_iter->next_handler;
             }
             free(message_info.message_data);
+        }
+        else
+        {
+            vTaskDelay(1 / portTICK_PERIOD_MS);
+        }
+        if(args != NULL)
+        {
+            break;
         }
     }
 }

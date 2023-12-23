@@ -65,11 +65,11 @@ pub fn clearMessageQueueHandles() -> u8
     retVal
 }
 
-pub fn generateTestComponentHandle() -> component_handle_t
+pub fn generateTestComponentHandle() -> (component_handle_t, u8)
 {
     let mut retComp: component_handle_t = 0;
-    unsafe { crate::create_handle_for_component(&mut retComp as *mut component_handle_t); };
-    retComp
+    let error = unsafe { crate::create_handle_for_component(&mut retComp as *mut component_handle_t) };
+    (retComp, error)
 }
 
 pub fn removeTestComponentHandle(compHandle: component_handle_t) -> u8
@@ -99,14 +99,14 @@ pub fn unregisterTestHandlerNormal(compHandle: component_handle_t, callHandle: c
     retVal
 }
 
-pub fn createNewMessageNormal(msg_type: u8, compHandle: component_handle_t, data: &str) -> u8
+pub fn createNewMessageNormal(msg_type: u8, compHandle: component_handle_t, data: *mut ::std::os::raw::c_void, len: usize) -> u8
 {
-    let mut mutData = message_info_t
+    let mutData = message_info_t
     {
         message_type: msg_type,
         component_handle: compHandle,
-        message_data: data.as_ptr() as *mut ::std::os::raw::c_void,
-        message_size: data.len(),
+        message_data: data,
+        message_size: len,
     };
 
     let retVal = unsafe { crate::send_message_to_normal_queue(mutData) };
@@ -134,14 +134,14 @@ pub fn unregisterTestHandlerPriority(compHandle: component_handle_t, callHandle:
     retVal
 }
 
-pub fn createNewMessagePriority(msg_type: u8, compHandle: component_handle_t, data: &str) -> u8
+pub fn createNewMessagePriority(msg_type: u8, compHandle: component_handle_t, data: *mut ::std::os::raw::c_void, len: usize) -> u8
 {
-    let mut mutData = message_info_t
+    let mutData = message_info_t
     {
         message_type: msg_type,
         component_handle: compHandle,
-        message_data: data.as_ptr() as *mut ::std::os::raw::c_void,
-        message_size: data.len(),
+        message_data: data,
+        message_size: len,
     };
 
     let retVal = unsafe { crate::send_message_to_priority_queue(mutData) };
@@ -153,21 +153,150 @@ mod tests
 {
     use super::*;
 
+    fn spin_normal_queue_once() -> bool
+    {
+        let queue_type = "normal_queue\0".as_ptr() as *const i8;
+        let retVal = unsafe { crate::spinQueueTaskOnce(queue_type) };
+        retVal
+    }
+
+    fn spin_priority_queue_once() -> bool
+    {
+        let queue_type = "priority_queue\0".as_ptr() as *const i8;
+        let retVal = unsafe { crate::spinQueueTaskOnce(queue_type) };
+        retVal
+    }
+
     #[test]
     fn test_normal_queue()
     {
-
+        let testMsg: &str = "test Message\0";
+        let strPtr = testMsg.as_ptr() as *const i8;
+        let testPtr = unsafe{ crate::createVoidPtr(strPtr, testMsg.len()) };
+        let msg_type: u8 = 3;
+        initMessageQueue();
+        assert_eq!(checkQueueActive(0), true);
+        assert_eq!(checkQueueActive(1), false);
+        let (testComponent, error) = generateTestComponentHandle();
+        assert_eq!(error, 0);
+        let testCallbackOne = registerTestHandlerNormal(1, testComponent);
+        let testCallbackTwo = registerTestHandlerNormal(2, testComponent);
+        let testCallbackThree = registerTestHandlerNormal(3, testComponent);
+        createNewMessageNormal(msg_type, testComponent, testPtr, testMsg.len());
+        assert_eq!(spin_normal_queue_once(), true);
+        unsafe
+        {
+            assert_eq!(testMsg, lastStrDatOne);
+            assert_eq!(msg_type, lastMsgTypeOne);
+            assert_eq!(testComponent, lastCompHandleOne);
+        }
+        unsafe
+        {
+            assert_eq!(testMsg, lastStrDatTwo);
+            assert_eq!(msg_type, lastMsgTypeTwo);
+            assert_eq!(testComponent, lastCompHandleTwo);
+        }
+        unsafe
+        {
+            assert_eq!(testMsg, lastStrDatThree);
+            assert_eq!(msg_type, lastMsgTypeThree);
+            assert_eq!(testComponent, lastCompHandleThree);
+        }
+        unregisterTestHandlerNormal(testComponent, testCallbackOne);
+        unregisterTestHandlerNormal(testComponent, testCallbackTwo);
+        unregisterTestHandlerNormal(testComponent, testCallbackThree);
+        removeTestComponentHandle(testComponent);
+        unsafe{ crate::uninit_queue(0) };
     }
 
     #[test]
     fn test_priority_queue()
     {
-        
+        let testMsg: &str = "test Message\0";
+        let strPtr = testMsg.as_ptr() as *const i8;
+        let testPtr = unsafe{ crate::createVoidPtr(strPtr, testMsg.len()) };
+        let msg_type: u8 = 3;
+        initPriorityMessageQueue();
+        assert_eq!(checkQueueActive(1), true);
+        assert_eq!(checkQueueActive(0), false);
+        let (testComponent, error) = generateTestComponentHandle();
+        assert_eq!(error, 0);
+        let testCallbackOne = registerTestHandlerPriority(1, testComponent);
+        let testCallbackTwo = registerTestHandlerPriority(2, testComponent);
+        let testCallbackThree = registerTestHandlerPriority(3, testComponent);
+        createNewMessagePriority(msg_type, testComponent, testPtr, testMsg.len());
+        assert_eq!(spin_priority_queue_once(), true);
+        unsafe
+        {
+            assert_eq!(testMsg, lastStrDatOne);
+            assert_eq!(msg_type, lastMsgTypeOne);
+            assert_eq!(testComponent, lastCompHandleOne);
+        }
+        unsafe
+        {
+            assert_eq!(testMsg, lastStrDatTwo);
+            assert_eq!(msg_type, lastMsgTypeTwo);
+            assert_eq!(testComponent, lastCompHandleTwo);
+        }
+        unsafe
+        {
+            assert_eq!(testMsg, lastStrDatThree);
+            assert_eq!(msg_type, lastMsgTypeThree);
+            assert_eq!(testComponent, lastCompHandleThree);
+        }
+        unregisterTestHandlerPriority(testComponent, testCallbackOne);
+        unregisterTestHandlerPriority(testComponent, testCallbackTwo);
+        unregisterTestHandlerPriority(testComponent, testCallbackThree);
+        removeTestComponentHandle(testComponent);
+        unsafe{ crate::uninit_queue(1) };
     }
 
     #[test]
     fn test_both_queues()
     {
-        
+        let testMsgN: &str = "test Message N\0";
+        let strPtrN = testMsgN.as_ptr() as *const i8;
+        let testPtrN = unsafe{ crate::createVoidPtr(strPtrN, testMsgN.len()) };
+        let testMsgP: &str = "test Message P\0";
+        let strPtrP = testMsgP.as_ptr() as *const i8;
+        let testPtrP = unsafe{ crate::createVoidPtr(strPtrP, testMsgP.len()) };
+        let msg_type: u8 = 3;
+        initMessageQueue();
+        initPriorityMessageQueue();
+        assert_eq!(checkQueueActive(0), true);
+        assert_eq!(checkQueueActive(1), true);
+        let (testComponent, error) = generateTestComponentHandle();
+        assert_eq!(error, 0);
+        let testCallbackOne = registerTestHandlerPriority(1, testComponent);
+        let testCallbackTwo = registerTestHandlerPriority(2, testComponent);
+        let testCallbackThree = registerTestHandlerNormal(3, testComponent);
+        createNewMessageNormal(msg_type, testComponent, testPtrN, testMsgN.len());
+        createNewMessagePriority(msg_type, testComponent, testPtrP, testMsgP.len());
+        assert_eq!(spin_normal_queue_once(), true);
+        assert_eq!(spin_priority_queue_once(), true);
+        unsafe
+        {
+            assert_eq!(testMsgP, lastStrDatOne);
+            assert_eq!(msg_type, lastMsgTypeOne);
+            assert_eq!(testComponent, lastCompHandleOne);
+        }
+        unsafe
+        {
+            assert_eq!(testMsgP, lastStrDatTwo);
+            assert_eq!(msg_type, lastMsgTypeTwo);
+            assert_eq!(testComponent, lastCompHandleTwo);
+        }
+        unsafe
+        {
+            assert_eq!(testMsgN, lastStrDatThree);
+            assert_eq!(msg_type, lastMsgTypeThree);
+            assert_eq!(testComponent, lastCompHandleThree);
+        }
+        unregisterTestHandlerPriority(testComponent, testCallbackOne);
+        unregisterTestHandlerPriority(testComponent, testCallbackTwo);
+        unregisterTestHandlerNormal(testComponent, testCallbackThree);
+        removeTestComponentHandle(testComponent);
+        unsafe{ crate::uninit_queue(0) };
+        unsafe{ crate::uninit_queue(1) };
     }
 }

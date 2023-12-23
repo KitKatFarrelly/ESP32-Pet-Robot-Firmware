@@ -76,6 +76,8 @@ void deleteQueue(QueueHandle_t handle);
 
 bool setTOFReadVal(const uint8_t* read_data, size_t size);
 
+void* createVoidPtr(const char* str, size_t len);
+
 // mocked functions
 
 void app_main(void);
