@@ -870,7 +870,7 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 		if(s_measurement_buffer[i][0x02] < 0x48)
 		{
 			ESP_LOGE(TAG, "measurement buffer %x is not large enough.", s_measurement_buffer[i][2]);
-			break;
+			continue;
 		}
 
 		//determines subcapture of the data. used in 8x8 mode.
