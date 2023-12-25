@@ -12,7 +12,6 @@
 
 #include "ToF_I2C.h"
 #include "tof_bin_image.h"
-#include "MESSAGE_QUEUE.h"
 #include "FLASH_SPI.h"
 
 //I2C definitions
@@ -69,8 +68,7 @@ static uint8_t TOF_SET_FACTORY_CAL_BLOB_NAME(uint8_t iter, char* blob_name);
 // Internal Variables
 
 static bool s_is_tmf8828_mode = false;
-static TOF_DATA_t* s_ring_buffer_ptr = NULL;
-static uint8_t s_ring_buffer_size = 0;
+static uint8_t s_ring_buffer_iter = 0;
 static uint8_t s_measurement_iter = 0;
 static uint8_t s_starting_iter = 0;
 static uint8_t s_measurement_buffer[MEASUREMENT_BUF_SIZE][MEASUREMENT_DAT_SIZE] = {0};
@@ -141,8 +139,8 @@ void TOF_INIT(void)
     gpio_config(&io_conf);
 	
 	s_is_tmf8828_mode = false;
-	s_ring_buffer_ptr = NULL;
-	s_ring_buffer_size = 0;
+	ToF_ring_buffer_ptr = NULL;
+	ToF_ring_buffer_size = 0;
 	s_measurement_iter = 0;
 	s_starting_iter = 0;
 	s_measurement_flags = 0;
@@ -152,6 +150,7 @@ void TOF_INIT(void)
 
 	if(check_is_queue_active(1))
 	{
+		create_handle_for_component(&ToF_public_component);
 		create_handle_for_component(&s_internal_comp_handle);
 		register_priority_handler_for_messages(TOF_INTERNAL_MESSAGE_HANDLER, s_internal_comp_handle);
 	}
@@ -423,12 +422,13 @@ uint8_t TOF_RETURN_CALIBRATION_STATUS(void)
 
 uint8_t TOF_START_MEASUREMENTS(TOF_DATA_t* TOF_DATA_PTR, uint8_t ring_buf_size)
 {
+	if(ToF_ring_buffer_ptr != NULL) return 1;
 	uint8_t write_data[2] = {0, 0};
 	write_data[0] = 0x08;
 	write_data[1] = 0x10;
 	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
-	s_ring_buffer_ptr = TOF_DATA_PTR;
-	s_ring_buffer_size = ring_buf_size;
+	ToF_ring_buffer_ptr = TOF_DATA_PTR;
+	ToF_ring_buffer_size = ring_buf_size;
 	return 0;
 }
 
@@ -438,8 +438,8 @@ uint8_t TOF_STOP_MEASUREMENTS(void)
 	write_data[0] = 0x08;
 	write_data[1] = 0xFF;
 	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
-	s_ring_buffer_ptr = NULL;
-	s_ring_buffer_size = 0;
+	ToF_ring_buffer_ptr = NULL;
+	ToF_ring_buffer_size = 0;
 	return 0;
 }
 
@@ -800,6 +800,7 @@ static void TOF_INTERNAL_MESSAGE_HANDLER(component_handle_t comp_handle, uint8_t
 static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 {
 	uint8_t number_of_measurements = (s_is_tmf8828_mode) ? 4 : 1;
+	ESP_LOGI(TAG, "converting i2c buffer to array, in 8828 mode: %u.", s_is_tmf8828_mode);
 
 	//temporarily using this just to check that we have enough data
 	uint8_t ending_iter = s_measurement_iter;
@@ -809,16 +810,53 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 		ending_iter += MEASUREMENT_BUF_SIZE;
 	}
 
+	if(ToF_ring_buffer_ptr == NULL)
+	{
+		ESP_LOGE(TAG, "ToF_ring_buffer_ptr is invalid. exiting");
+		return 1;
+	}
+
 	if(ending_iter - s_starting_iter < number_of_measurements)
 	{
+		ESP_LOGE(TAG, "Insufficient measurements to convert buffer.");
+		return 1;
+	}
+
+	if(~s_measurement_flags & (1 << s_starting_iter))
+	{
+		ESP_LOGE(TAG, "starting iter contains no data.");
 		return 1;
 	}
 
 	//Do the actual conversion here
-	ending_iter = s_starting_iter + number_of_measurements;
+	ending_iter = s_starting_iter + number_of_measurements - 1;
 	if(ending_iter >= MEASUREMENT_BUF_SIZE)
 	{
 		ending_iter -= MEASUREMENT_BUF_SIZE;
+	}
+
+	if(s_is_tmf8828_mode)
+	{
+		ToF_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field = malloc(8 * sizeof(uint16_t*));
+		for(uint8_t pixel_row = 0; pixel_row < 8; pixel_row++)
+		{
+			ToF_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[pixel_row] = malloc(8 * sizeof(uint16_t));
+		}
+		ToF_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size = 8;
+		ToF_ring_buffer_ptr[s_ring_buffer_iter].vertical_size = 8;
+	}
+	else
+	{
+		//technically the SPAD map can be 3x3 or 3x6.
+		//assuming the Map is 4x4 right now.
+		
+		ToF_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field = malloc(4 * sizeof(uint16_t*));
+		for(uint8_t pixel_row = 0; pixel_row < 4; pixel_row++)
+		{
+			ToF_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[pixel_row] = malloc(4 * sizeof(uint16_t));
+		}
+		ToF_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size = 4;
+		ToF_ring_buffer_ptr[s_ring_buffer_iter].vertical_size = 4;
 	}
 
 	for(uint8_t i = s_starting_iter; i == ending_iter; i++)
@@ -827,18 +865,74 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 		{
 			i = 0;
 		}
+
+		//check that the measurement buffer is big enough
+		if(s_measurement_buffer[i][0x02] < 0x48)
+		{
+			ESP_LOGE(TAG, "measurement buffer %x is not large enough.", s_measurement_buffer[i][2]);
+			break;
+		}
+
+		//determines subcapture of the data. used in 8x8 mode.
+		uint8_t convert_loop_cnt = s_measurement_buffer[i][0x04];
+		ESP_LOGI(TAG, "buffer capture value is %x, subcapture %x.", convert_loop_cnt, convert_loop_cnt & 0x03);
+		ESP_LOGI(TAG, "number of valid results is %u.", s_measurement_buffer[i][0x06]);
+
 		//convert i2c data to depth pixel grid
+		//note: nested for loops like this are fucking unreadable, do better
+		if(s_is_tmf8828_mode)
+		{
+			for(uint8_t j = 0; j < (ToF_ring_buffer_ptr[s_ring_buffer_iter].vertical_size / 2); j++)
+			{
+				for(uint8_t k = 0; k < (ToF_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size_size / 4); k++)
+				{
+					//tmf8828 mode works upside down
+					uint8_t lin_val = 3 * ((4 * k) + j);
+					uint8_t v_iter = (7 - (j * 2)) - (convert_loop_cnt & 0x02);
+					uint8_t h_iter = (k * 4) + (2 * (convert_loop_cnt & 0x01));
+					ToF_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter] = s_measurement_buffer[i][0x19 + lin_val];
+					ToF_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter] += s_measurement_buffer[i][0x1A + lin_val] << 8;
+					ToF_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter + 1] = s_measurement_buffer[i][0x31 + lin_val];
+					ToF_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter + 1] += s_measurement_buffer[i][0x32 + lin_val] << 8;
+				}
+			}
+		}
+		else
+		{
+			for(uint8_t j = 0; j < ToF_ring_buffer_ptr[s_ring_buffer_iter].vertical_size; j++)
+			{
+				for(uint8_t k = 0; k < ToF_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size_size; k++)
+				{
+					uint8_t lin_val = 3 * ((4 * j) + k);
+					ToF_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[j][k] = s_measurement_buffer[i][0x19 + lin_val];
+					ToF_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[j][k] += s_measurement_buffer[i][0x1A + lin_val] << 8;
+				}
+			}
+		}
 
 		//clear flag at buffer location so it can be used
 		s_measurement_flags &= ~(1 << i);
+		s_ring_buffer_iter++;
+		if(s_ring_buffer_iter >= ToF_ring_buffer_size)
+		{
+			s_ring_buffer_iter = 0;
+		}
 	}
-	
 
 	s_starting_iter += number_of_measurements;
 	if(s_starting_iter >= MEASUREMENT_BUF_SIZE)
 	{
 		s_starting_iter -= MEASUREMENT_BUF_SIZE;
 	}
+
+	ToF_ring_buffer_ptr[s_ring_buffer_iter].is_populated = true;
+	message_info_t depth_array_msg;
+	depth_array_msg.message_data=malloc(sizeof(uint8_t));
+	depth_array_msg.message_data[0] = s_ring_buffer_iter;
+	depth_array_msg.message_size=sizeof(uint8_t);
+	depth_array_msg.component_handle=ToF_public_component;
+	depth_array_msg.message_type=TOF_MSG_NEW_DEPTH_ARRAY;
+	send_message_to_priority_queue(depth_array_msg);
 	return 0;
 }
 

@@ -1,18 +1,26 @@
 #ifndef H_TOF_DRVR
 #define H_TOF_DRVR
 
+#include "MESSAGE_QUEUE.h"
+
 typedef struct
 {
-    uint8_t** depth_pixel_field;
+    uint16_t** depth_pixel_field;
     uint8_t horizontal_size;
     uint8_t vertical_size;
+    bool is_populated;
 } TOF_DATA_t;
 
 typedef enum
 {
     TOF_MSG_INTERNAL_CONVERT_I2C,
+    TOF_MSG_NEW_DEPTH_ARRAY,
     TOF_MSG_MAX,
 } TOF_MESSAGE_TYPES_t;
+
+component_handle_t ToF_public_component = 0;
+TOF_DATA_t* ToF_ring_buffer_ptr = NULL;
+uint8_t ToF_ring_buffer_size = 0;
 
 // Initializes firmware on TOF sensor.
 void TOF_INIT(void);
