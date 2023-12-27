@@ -148,24 +148,24 @@ pub fn createNewMessagePriority(msg_type: u8, compHandle: component_handle_t, da
     retVal
 }
 
+pub fn spin_normal_queue_once() -> bool
+{
+    let queue_type = "normal_queue\0".as_ptr() as *const i8;
+    let retVal = unsafe { crate::spinQueueTaskOnce(queue_type) };
+    retVal
+}
+
+pub fn spin_priority_queue_once() -> bool
+{
+    let queue_type = "priority_queue\0".as_ptr() as *const i8;
+    let retVal = unsafe { crate::spinQueueTaskOnce(queue_type) };
+    retVal
+}
+
 #[cfg(test)]
 mod tests
 {
     use super::*;
-
-    fn spin_normal_queue_once() -> bool
-    {
-        let queue_type = "normal_queue\0".as_ptr() as *const i8;
-        let retVal = unsafe { crate::spinQueueTaskOnce(queue_type) };
-        retVal
-    }
-
-    fn spin_priority_queue_once() -> bool
-    {
-        let queue_type = "priority_queue\0".as_ptr() as *const i8;
-        let retVal = unsafe { crate::spinQueueTaskOnce(queue_type) };
-        retVal
-    }
 
     #[test]
     fn test_normal_queue()

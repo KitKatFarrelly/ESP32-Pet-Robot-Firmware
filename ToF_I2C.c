@@ -33,7 +33,8 @@
 
 #define FW_HEADER_LEN 4
 #define MEASUREMENT_BUF_SIZE 8
-#define MEASUREMENT_DAT_SIZE 0x84
+#define MEASUREMENT_DAT_SIZE 0x48
+#define DEPTH_ARRAY_BUF_SIZE 20
 
 #define tmf8821_fac_cal		"tmf8821_fac"
 #define tmf8828_fac_cal_1	"tmf8828_fac_1"
@@ -68,9 +69,7 @@ static uint8_t TOF_SET_FACTORY_CAL_BLOB_NAME(uint8_t iter, char* blob_name);
 // Internal Variables
 
 static bool s_is_tmf8828_mode = false;
-static TOF_DATA_t* s_ring_buffer_ptr = NULL;
-static uint8_t s_ring_buffer_size = 0;
-static uint8_t s_using_ring_buffer = 0;
+static TOF_DATA_t s_ring_buffer_ptr[DEPTH_ARRAY_BUF_SIZE] = {0};
 static uint8_t s_ring_buffer_iter = 0;
 static uint8_t s_measurement_iter = 0;
 static uint8_t s_starting_iter = 0;
@@ -142,8 +141,6 @@ void TOF_INIT(void)
     gpio_config(&io_conf);
 	
 	s_is_tmf8828_mode = false;
-	s_ring_buffer_ptr = NULL;
-	s_ring_buffer_size = 0;
 	s_measurement_iter = 0;
 	s_starting_iter = 0;
 	s_measurement_flags = 0;
@@ -178,11 +175,8 @@ void TOF_INIT(void)
 		s_is_tmf8828_mode = true; //assume that we were succssful in setting tmf8828 mode
 	}
 
-#ifndef FUNCTIONAL_TESTS
 	//TOF INTERRUPT HANDLER
-	//TODO: functional test for isr
 	gpio_isr_handler_add(TOF_INTR, TOF_MEASUREMENT_INTR_HANDLE, NULL);
-#endif
 }
 
 uint8_t TOF_LOAD_CONFIG(uint8_t config)
@@ -423,15 +417,12 @@ uint8_t TOF_RETURN_CALIBRATION_STATUS(void)
 	}
 }
 
-uint8_t TOF_START_MEASUREMENTS(TOF_DATA_t* TOF_DATA_PTR, uint8_t ring_buf_size)
+uint8_t TOF_START_MEASUREMENTS(void)
 {
-	if(s_ring_buffer_ptr != NULL) return 1;
 	uint8_t write_data[2] = {0, 0};
 	write_data[0] = 0x08;
 	write_data[1] = 0x10;
 	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
-	s_ring_buffer_ptr = TOF_DATA_PTR;
-	s_ring_buffer_size = ring_buf_size;
 	return 0;
 }
 
@@ -441,10 +432,6 @@ uint8_t TOF_STOP_MEASUREMENTS(void)
 	write_data[0] = 0x08;
 	write_data[1] = 0xFF;
 	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
-	//if using ring buffer wait until not
-	while(s_using_ring_buffer);
-	s_ring_buffer_ptr = NULL;
-	s_ring_buffer_size = 0;
 	return 0;
 }
 
@@ -804,7 +791,6 @@ static void TOF_INTERNAL_MESSAGE_HANDLER(component_handle_t comp_handle, uint8_t
 
 static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 {
-	s_using_ring_buffer = 1;
 	uint8_t number_of_measurements = (s_is_tmf8828_mode) ? 4 : 1;
 	ESP_LOGI(TAG, "converting i2c buffer to array, in 8828 mode: %u.", s_is_tmf8828_mode);
 
@@ -816,24 +802,15 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 		ending_iter += MEASUREMENT_BUF_SIZE;
 	}
 
-	if(s_ring_buffer_ptr == NULL)
-	{
-		ESP_LOGE(TAG, "s_ring_buffer_ptr is invalid. exiting");
-		s_using_ring_buffer = 0;
-		return 1;
-	}
-
 	if(ending_iter - s_starting_iter < number_of_measurements)
 	{
 		ESP_LOGE(TAG, "Insufficient measurements to convert buffer.");
-		s_using_ring_buffer = 0;
 		return 1;
 	}
 
 	if(~s_measurement_flags & (1 << s_starting_iter))
 	{
 		ESP_LOGE(TAG, "starting iter contains no data.");
-		s_using_ring_buffer = 0;
 		return 1;
 	}
 
@@ -922,7 +899,7 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 		//clear flag at buffer location so it can be used
 		s_measurement_flags &= ~(1 << i);
 		s_ring_buffer_iter++;
-		if(s_ring_buffer_iter >= s_ring_buffer_size)
+		if(s_ring_buffer_iter >= DEPTH_ARRAY_BUF_SIZE)
 		{
 			s_ring_buffer_iter = 0;
 		}
@@ -942,7 +919,6 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 	depth_array_msg.component_handle=ToF_public_component;
 	depth_array_msg.message_type=TOF_MSG_NEW_DEPTH_ARRAY;
 	send_message_to_priority_queue(depth_array_msg);
-	s_using_ring_buffer = 0;
 	return 0;
 }
 

@@ -47,8 +47,8 @@ uint8_t TOF_LOAD_FACTORY_CALIBRATION(void);
 // 1 means there was an error in reading from the device
 uint8_t TOF_RETURN_CALIBRATION_STATUS(void);
 
-// Tells TOF Sensor to start measuring data, with a pointer to a data ring buffer.
-uint8_t TOF_START_MEASUREMENTS(TOF_DATA_t* TOF_DATA_PTR, uint8_t ring_buf_size);
+// Tells TOF Sensor to start measuring data.
+uint8_t TOF_START_MEASUREMENTS(void);
 
 // Tells TOF Sensor to stop measuring data.
 uint8_t TOF_STOP_MEASUREMENTS(void);

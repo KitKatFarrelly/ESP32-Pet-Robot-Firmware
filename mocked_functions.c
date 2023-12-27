@@ -39,6 +39,10 @@ static bool can_write = 0;
 
 static BlobType_t blob_array[MAX_BLOBS] = {0};
 
+static void (*s_isr_func_ptr)(void*) = NULL;
+
+static uint8_t s_isr_gpio = 0;
+
 //static function defs
 
 static uint8_t getTaskFromName(const char* name);
@@ -55,6 +59,16 @@ bool spinQueueTaskOnce(const char* name)
     printf("spinning task %s\n", task_array[task_array_iterator].name);
     (*(task_array[task_array_iterator].func_ptr))(name);
     return true;
+}
+
+bool spinISROnce(uint8_t gpio_num)
+{
+    if(s_isr_gpio == gpio_num)
+    {
+        (*s_isr_func_ptr)(NULL);
+        return true;
+    }
+    return false;
 }
 
 bool deleteTask(const char* name)
@@ -224,6 +238,12 @@ bool xQueueReceive(QueueHandle_t queue_ptr, void* message_info, TickType_t time_
 void vTaskDelay(TickType_t time_thing)
 {
     printf("waited %u ms\n", time_thing);
+}
+
+esp_err_t gpio_isr_handler_add(uint8_t gpio_num, void (*func_ptr)(void*), void* args)
+{
+    s_isr_func_ptr = func_ptr;
+    s_isr_gpio = gpio_num;
 }
 
 esp_err_t mock_tof_read(uint8_t* TOF_OUT, uint8_t dat_size)

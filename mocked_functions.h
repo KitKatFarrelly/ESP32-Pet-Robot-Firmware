@@ -15,6 +15,8 @@
 
 #define NVS_READWRITE 1
 
+#define GPIO_NUM_15 15
+
 typedef struct
 {
     size_t total_entries;
@@ -70,6 +72,8 @@ printf("\n");
 
 bool spinQueueTaskOnce(const char* name);
 
+bool spinISROnce(uint8_t gpio_num);
+
 bool deleteTask(const char* name);
 
 void deleteQueue(QueueHandle_t handle);
@@ -91,6 +95,8 @@ bool xQueueSend(QueueHandle_t queue_ptr, void* message_info, TickType_t time_thi
 bool xQueueReceive(QueueHandle_t queue_ptr, void* message_info, TickType_t time_thing);
 
 void vTaskDelay(TickType_t time_thing);
+
+esp_err_t gpio_isr_handler_add(uint8_t gpio_num, void (*func_ptr)(void*), void* args);
 
 esp_err_t mock_tof_read(uint8_t* TOF_OUT, uint8_t dat_size);
 
