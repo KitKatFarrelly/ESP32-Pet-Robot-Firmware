@@ -19,8 +19,6 @@ typedef enum
 } TOF_MESSAGE_TYPES_t;
 
 component_handle_t ToF_public_component = 0;
-TOF_DATA_t* ToF_ring_buffer_ptr = NULL;
-uint8_t ToF_ring_buffer_size = 0;
 
 // Initializes firmware on TOF sensor.
 void TOF_INIT(void);
