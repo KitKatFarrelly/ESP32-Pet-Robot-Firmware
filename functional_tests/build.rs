@@ -16,7 +16,7 @@ fn main() {
     let headers_path = libdir_path.join("bindgen_wrapper.h");
     let headers_path_str = headers_path.to_str().expect("Path is not a valid string");
 
-    let dst = cmake::Config::new(".").generator("Ninja").build();
+    let dst = cmake::Config::new(".").generator("Ninja").always_configure(true).build();
 
     println!("cargo:rustc-link-search=native={}", dst.display());
     println!("cargo:rustc-link-lib=static=unit_test_lib");

@@ -78,6 +78,10 @@ static uint8_t s_measurement_flags = 0;
 static uint8_t s_current_config = 0;
 static component_handle_t s_internal_comp_handle = 0;
 
+// Externs
+
+component_handle_t ToF_public_component = 0;
+
 // Interrupt Handler
 
 static void TOF_MEASUREMENT_INTR_HANDLE(void* arg);
@@ -376,15 +380,15 @@ uint8_t TOF_LOAD_FACTORY_CALIBRATION(void)
 		if(factory_calibration == NULL) return 1;
 		
 		// write factory calibration to memory
-		while(factory_counter < 0xC0)
+		while(factory_counter < (0xC0 - 0x04))
 		{
-			uint8_t dat_size = 0xC0 - factory_counter;
+			uint8_t dat_size = (0xC0 - factory_counter) - 0x04;
 			if(dat_size > 0x40)
 			{
 				dat_size = 0x40;
 			}
 			write_data[0] = 0x24 + (factory_counter);
-			memcpy((write_data + 1), (factory_calibration + factory_counter + 4), dat_size);
+			memcpy((write_data + 1), (factory_calibration + ((factory_counter + 0x04) * sizeof(uint8_t*))), dat_size);
 			if(TOF_WRITE_APP(write_data, dat_size + 1, 5) != ESP_OK) return 1;
 			factory_counter += dat_size;
 		}
@@ -870,7 +874,7 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 		{
 			for(uint8_t j = 0; j < (s_ring_buffer_ptr[s_ring_buffer_iter].vertical_size / 2); j++)
 			{
-				for(uint8_t k = 0; k < (s_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size_size / 4); k++)
+				for(uint8_t k = 0; k < (s_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size / 4); k++)
 				{
 					//tmf8828 mode works upside down
 					uint8_t lin_val = 3 * ((4 * k) + j);
@@ -887,7 +891,7 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 		{
 			for(uint8_t j = 0; j < s_ring_buffer_ptr[s_ring_buffer_iter].vertical_size; j++)
 			{
-				for(uint8_t k = 0; k < s_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size_size; k++)
+				for(uint8_t k = 0; k < s_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size; k++)
 				{
 					uint8_t lin_val = 3 * ((4 * j) + k);
 					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[j][k] = s_measurement_buffer[i][0x19 + lin_val];
@@ -913,11 +917,11 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 
 	s_ring_buffer_ptr[s_ring_buffer_iter].is_populated = true;
 	message_info_t depth_array_msg;
-	depth_array_msg.message_data=(const TOF_DATA_t*) malloc(sizeof(TOF_DATA_t*));
-	*depth_array_msg.message_data = &(s_ring_buffer_ptr[s_ring_buffer_iter]);
-	depth_array_msg.message_size=sizeof(TOF_DATA_t*);
-	depth_array_msg.component_handle=ToF_public_component;
-	depth_array_msg.message_type=TOF_MSG_NEW_DEPTH_ARRAY;
+	depth_array_msg.message_data = malloc(sizeof(TOF_DATA_t*));
+	*((TOF_DATA_t**) depth_array_msg.message_data) = (s_ring_buffer_ptr + (s_ring_buffer_iter * sizeof(TOF_DATA_t*)));
+	depth_array_msg.message_size = sizeof(TOF_DATA_t*);
+	depth_array_msg.component_handle = ToF_public_component;
+	depth_array_msg.message_type = TOF_MSG_NEW_DEPTH_ARRAY;
 	send_message_to_priority_queue(depth_array_msg);
 	return 0;
 }

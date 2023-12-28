@@ -244,6 +244,8 @@ esp_err_t gpio_isr_handler_add(uint8_t gpio_num, void (*func_ptr)(void*), void* 
 {
     s_isr_func_ptr = func_ptr;
     s_isr_gpio = gpio_num;
+
+    return ESP_OK;
 }
 
 esp_err_t mock_tof_read(uint8_t* TOF_OUT, uint8_t dat_size)

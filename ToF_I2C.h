@@ -18,7 +18,7 @@ typedef enum
     TOF_MSG_MAX,
 } TOF_MESSAGE_TYPES_t;
 
-component_handle_t ToF_public_component = 0;
+extern component_handle_t ToF_public_component;
 
 // Initializes firmware on TOF sensor.
 void TOF_INIT(void);

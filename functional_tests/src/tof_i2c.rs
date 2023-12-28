@@ -2,6 +2,7 @@ use crate::component_handle_t;
 use crate::message_info_t;
 use crate::callback_handle_t;
 use crate::TOF_DATA_t;
+use std::mem;
 use std::slice;
 use crate::spi_flash;
 use crate::message_queue;
@@ -14,7 +15,7 @@ unsafe extern "C" fn ToFMessageHandler(compHandle: component_handle_t, msg_type:
 {
     ToFCompHandle = compHandle;
     ToFMsgType = msg_type;
-    TofArrayData = slice::from_raw_parts(msg_data as *const TOF_DATA_t, mem::size_of::<TOF_DATA_t>);
+    TofArrayData = slice::from_raw_parts(msg_data as *const TOF_DATA_t, mem::size_of::<TOF_DATA_t>());
 }
 
 pub fn appendNewTOFSensorReturn(dat: &[u8])
@@ -28,7 +29,7 @@ pub fn appendNewTOFSensorReturn(dat: &[u8])
     println!("");
     unsafe
     {
-        ret_bool = setTOFReadVal(test_ptr, dat.len());
+        ret_bool = crate::setTOFReadVal(test_ptr, dat.len());
     }
     println!("Append Data returned {}.", ret_bool);
 }
@@ -38,7 +39,7 @@ pub fn tofInitialize()
     unsafe{ crate::TOF_INIT() };
 }
 
-pub fn tofLoadConfig(u8 config) -> u8
+pub fn tofLoadConfig(config: u8) -> u8
 {
     let retVal = unsafe{ crate::TOF_LOAD_CONFIG(config) };
     retVal

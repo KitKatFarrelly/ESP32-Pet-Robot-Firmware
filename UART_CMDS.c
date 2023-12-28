@@ -45,7 +45,7 @@ static void tinyusb_cdc_line_state_changed_callback(int itf, cdcacm_event_t *eve
 
 // message queue functions
 
-static void uart_msg_queue_handler(component_handle_t component_type, uint8_t message_type, void* message_data);
+static void uart_msg_queue_handler(component_handle_t component_type, uint8_t message_type, void* message_data, size_t message_size);
 static char* uart_return_string_from_dispatcher(dispatcher_type_t dispatcher);
 static dispatcher_type_t uart_get_dispatcher_from_component(component_handle_t component);
 static component_handle_t uart_get_component_handle_from_dispatcher(dispatcher_type_t dispatcher);
@@ -539,17 +539,16 @@ static uint8_t uart_convert_str_to_args(const uint8_t * cmd_buf, char** argv_ptr
     return argc;
 }
 
-static void uart_msg_queue_handler(component_handle_t component_type, uint8_t message_type, void* message_data)
+static void uart_msg_queue_handler(component_handle_t component_type, uint8_t message_type, void* message_data, size_t message_size)
 {
     dispatcher_type_t dispatcher = uart_get_dispatcher_from_component(component_type);
     ESP_LOGI(TAG, "message from %s with message type %u.", uart_return_string_from_dispatcher(dispatcher), message_type);
     ESP_LOGI(TAG, "message data:");
     uint8_t* output_data = (uint8_t*) message_data;
-    for(int i = 0; i < sizeof(message_data); i++)
+    for(int i = 0; i < message_size; i++)
     {
         ESP_LOGI(TAG, "%x", output_data[i]);
     }
-
 }
 
 static char* uart_return_string_from_dispatcher(dispatcher_type_t dispatcher)
