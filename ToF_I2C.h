@@ -53,6 +53,9 @@ uint8_t TOF_START_MEASUREMENTS(void);
 // Tells TOF Sensor to stop measuring data.
 uint8_t TOF_STOP_MEASUREMENTS(void);
 
+// Set TOF sensor mode for measurements
+bool TOF_SET_TMF8828_MODE(bool set_tmf8828);
+
 // Read Data directly from Sensor without referring to a register.
 esp_err_t TOF_READ(uint8_t* TOF_OUT, uint8_t dat_size);
 

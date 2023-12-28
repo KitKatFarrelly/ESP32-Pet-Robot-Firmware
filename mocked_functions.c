@@ -98,10 +98,6 @@ void deleteQueue(QueueHandle_t handle)
 
 bool setTOFReadVal(const uint8_t* read_data, size_t size)
 {
-    if((size * sizeof(uint8_t)) > sizeof(read_data))
-    {
-        return false;
-    }
     if(TOF_read_queue == NULL)
     {
         TOF_read_queue = malloc(sizeof(TOF_queue_node_t));

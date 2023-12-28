@@ -165,22 +165,41 @@ void TOF_INIT(void)
 	}
 
 	// Check that we are running TMF8828 firmware
+	TOF_SET_TMF8828_MODE(true);
+
+	//TOF INTERRUPT HANDLER
+	gpio_isr_handler_add(TOF_INTR, TOF_MEASUREMENT_INTR_HANDLE, NULL);
+}
+
+bool TOF_SET_TMF8828_MODE(bool set_tmf8828)
+{
 	uint8_t mode_addr = 0x10;
 	uint8_t mode_data = 0;
 	if(TOF_READ_WRITE_APP(&mode_data, 1, &mode_addr, 1, 5) == ESP_OK)
 	{
 		ESP_LOGI(TAG, "Mode is %x", mode_data);
-		if(mode_data == 0x00)
+		if(set_tmf8828)
 		{
-			uint8_t write_data[2] = {0x08, 0x6C};
-			TOF_WRITE_APP(write_data, 2, 5);
-			TOF_WAIT_UNTIL_READY_APP(3);
+			if(mode_data == 0x00)
+			{
+				uint8_t write_data[2] = {0x08, 0x6C};
+				TOF_WRITE_APP(write_data, 2, 5);
+				TOF_WAIT_UNTIL_READY_APP(3);
+			}
+			s_is_tmf8828_mode = true; //assume that we were succssful in setting tmf8828 mode
 		}
-		s_is_tmf8828_mode = true; //assume that we were succssful in setting tmf8828 mode
+		else
+		{
+			if(mode_data == 0x08)
+			{
+				uint8_t write_data[2] = {0x08, 0x65};
+				TOF_WRITE_APP(write_data, 2, 5);
+				TOF_WAIT_UNTIL_READY_APP(3);
+			}
+			s_is_tmf8828_mode = false; //assume that we were succssful in setting tmf8821 mode
+		}
 	}
-
-	//TOF INTERRUPT HANDLER
-	gpio_isr_handler_add(TOF_INTR, TOF_MEASUREMENT_INTR_HANDLE, NULL);
+	return s_is_tmf8828_mode;
 }
 
 uint8_t TOF_LOAD_CONFIG(uint8_t config)
@@ -198,7 +217,7 @@ uint8_t TOF_LOAD_CONFIG(uint8_t config)
 	//Check command was executed
 	if(TOF_WAIT_UNTIL_READY_APP(3)) return 1;
 	write_data[0] = 0x20;
-	if(TOF_READ_WRITE_APP(write_data, 1, read_data, 4, 5) != ESP_OK) return 1;
+	if(TOF_READ_WRITE_APP(read_data, 4, write_data, 1, 5) != ESP_OK) return 1;
 	if(TOF_CHECK_REGISTERS(read_data, CHECK_CONFIG_PAGE_LOADED, 4) > 1)
 	{
 		return 1;
@@ -315,7 +334,7 @@ uint8_t TOF_STORE_FACTORY_CALIBRATION(void)
 		for(int j = 0; j < 3; j++)
 		{
 			write_data[0] = 0x20 + (j * 0x40);
-			if(TOF_READ_WRITE_APP(write_data, 1, read_data, 0x40, 5) == ESP_OK)
+			if(TOF_READ_WRITE_APP(read_data, 0x40, write_data, 1, 5) == ESP_OK)
 			{
 				memcpy(&factory_cal_blob[j * 0x40], read_data, 0x40);
 			}
@@ -388,7 +407,7 @@ uint8_t TOF_LOAD_FACTORY_CALIBRATION(void)
 				dat_size = 0x40;
 			}
 			write_data[0] = 0x24 + (factory_counter);
-			memcpy((write_data + 1), (factory_calibration + ((factory_counter + 0x04) * sizeof(uint8_t*))), dat_size);
+			memcpy((write_data + sizeof(uint8_t)), (factory_calibration + ((factory_counter + 0x04) * sizeof(uint8_t))), dat_size);
 			if(TOF_WRITE_APP(write_data, dat_size + 1, 5) != ESP_OK) return 1;
 			factory_counter += dat_size;
 		}
@@ -941,13 +960,13 @@ static void TOF_MEASUREMENT_INTR_HANDLE(void* arg)
 	//Read Interrupt Settings
 	//For example setting interrupts for results with this
 	write_data[0] = 0xE1;
-	if(TOF_READ_WRITE_APP(write_data, 1, read_data, 1, 1) != ESP_OK) return;
+	if(TOF_READ_WRITE_APP(read_data, 1, write_data, 1, 1) != ESP_OK) return;
 
 	ESP_LOGI(TAG, "interrupts that need to be cleared are the following: %u.", read_data[0]);
 	
 	// Read out Measurement
 	write_data[0] = 0x20;
-	if(!TOF_READ_WRITE_APP(write_data, 1, s_measurement_buffer[s_measurement_iter], MEASUREMENT_DAT_SIZE, 1) == ESP_OK) return;
+	if(!TOF_READ_WRITE_APP(s_measurement_buffer[s_measurement_iter], MEASUREMENT_DAT_SIZE, write_data, 1, 1) == ESP_OK) return;
 
 	//Set flags for buffers
 	s_measurement_flags |= (1 << s_measurement_iter);
