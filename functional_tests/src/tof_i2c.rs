@@ -27,9 +27,9 @@ pub fn appendNewTOFSensorReturn(dat: &[u8])
     let ret_bool;
     for x in dat
     {
-        print!("{:x} ", x);
+        print!("{:#04x} ", x);
     }
-    println!("length = {:x}", dat.len());
+    println!("length = {:#04x}", dat.len());
     unsafe
     {
         ret_bool = crate::setTOFReadVal(test_ptr, dat.len());
