@@ -817,6 +817,8 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 	uint8_t number_of_measurements = (s_is_tmf8828_mode) ? 4 : 1;
 	ESP_LOGI(TAG, "converting i2c buffer to array, in 8828 mode: %u.", s_is_tmf8828_mode);
 
+	ESP_LOGI(TAG, "operating on ring buffer pointer: %p.", &(s_ring_buffer_ptr[s_ring_buffer_iter]));
+
 	//temporarily using this just to check that we have enough data
 	uint8_t ending_iter = s_measurement_iter;
 	
@@ -921,11 +923,6 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 
 		//clear flag at buffer location so it can be used
 		s_measurement_flags &= ~(1 << i);
-		s_ring_buffer_iter++;
-		if(s_ring_buffer_iter >= DEPTH_ARRAY_BUF_SIZE)
-		{
-			s_ring_buffer_iter = 0;
-		}
 	}
 
 	s_starting_iter += number_of_measurements;
@@ -936,12 +933,19 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 
 	s_ring_buffer_ptr[s_ring_buffer_iter].is_populated = true;
 	message_info_t depth_array_msg;
-	depth_array_msg.message_data = malloc(sizeof(TOF_DATA_t*));
-	*((TOF_DATA_t**) depth_array_msg.message_data) = (s_ring_buffer_ptr + (s_ring_buffer_iter * sizeof(TOF_DATA_t*)));
+	depth_array_msg.message_data = malloc(sizeof(TOF_DATA_t**));
+	*((TOF_DATA_t**) depth_array_msg.message_data) = &(s_ring_buffer_ptr[s_ring_buffer_iter]);
 	depth_array_msg.message_size = sizeof(TOF_DATA_t*);
 	depth_array_msg.component_handle = ToF_public_component;
 	depth_array_msg.message_type = TOF_MSG_NEW_DEPTH_ARRAY;
 	send_message_to_priority_queue(depth_array_msg);
+
+	s_ring_buffer_iter++;
+	if(s_ring_buffer_iter >= DEPTH_ARRAY_BUF_SIZE)
+	{
+		s_ring_buffer_iter = 0;
+	}
+
 	return 0;
 }
 

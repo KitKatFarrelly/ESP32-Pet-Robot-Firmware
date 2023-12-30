@@ -18,7 +18,8 @@ unsafe extern "C" fn ToFMessageHandler(compHandle: component_handle_t, msg_type:
 {
     ToFCompHandle = compHandle;
     ToFMsgType = msg_type;
-    TofArrayData = slice::from_raw_parts(msg_data as *const TOF_DATA_t, mem::size_of::<TOF_DATA_t>());
+    let msg_ptr = msg_data as *const *const TOF_DATA_t;
+    TofArrayData = slice::from_raw_parts(*msg_ptr, mem::size_of::<TOF_DATA_t>());
 }
 
 pub fn appendNewTOFSensorReturn(dat: &[u8])
@@ -97,6 +98,12 @@ pub fn tofSwitchTofMode(tmf_8828_mode: bool) -> bool
     retVal
 }
 
+pub fn tofGetCompHandle() -> component_handle_t
+{
+    let retVal = unsafe{ crate::ToF_public_component };
+    retVal
+}
+
 pub fn tofSpinISROnce(gpio_num: u8) -> bool
 {
     let retVal = unsafe{ crate::spinISROnce(gpio_num) };
@@ -135,13 +142,24 @@ mod tests
         header
     }
 
-    fn createRandomMeasurementDataFrame() -> Vec<u8>
+    fn createRandomMeasurementDataFrame(subcapture: u8) -> Vec<u8>
     {
         let mut rng = rand::thread_rng();
 
-        let vals: Vec<u8> = (0..16).map(|_| rng.gen()).collect();
+        let mut header: Vec<u8> = vec![0x20, 0, 0x48, 0, subcapture];
 
-        vals
+        let mut vals: Vec<u8> = (0..0x43).map(|_| rng.gen()).collect();
+
+        header.append(&mut vals);
+
+        assert_eq!(header.len(), 0x48);
+
+        header
+    }
+
+    fn compareDataFrameToToFData(DataFrame: Vec<u8>) -> bool
+    {
+        false
     }
 
     #[test]
@@ -199,6 +217,7 @@ mod tests
         assert_eq!(tofReturnCalibrationStatus(), 0);
     }
 
+    #[test]
     fn test_factory_calibration_tmf8828()
     {
         //tofInitialize();
@@ -212,8 +231,63 @@ mod tests
     #[test]
     fn test_collect_measurements_tmf8821()
     {
-        //tofInitialize();
-        //tofSwitchTofMode(false);
+        message_queue::initPriorityMessageQueue();
+        assert_eq!(message_queue::checkQueueActive(1), true);
+        assert_eq!(message_queue::checkQueueActive(0), false);
+
+        //Initialize
+        let mut test_data: [u8; 3] = [0; 3];
+        test_data[0] = 0x41;
+        appendNewTOFSensorReturn(&test_data[..1]);
+        test_data[0] = 0x03;
+        appendNewTOFSensorReturn(&test_data[..3]);
+        test_data[0] = 0x00;
+        appendNewTOFSensorReturn(&test_data[..1]);
+        test_data[0] = 0x08;
+        appendNewTOFSensorReturn(&test_data[..1]);
+        tofInitialize();
+
+        //Switch Mode
+        test_data[0] = 0x08;
+        appendNewTOFSensorReturn(&test_data[..1]);
+        test_data[0] = 0x00;
+        appendNewTOFSensorReturn(&test_data[..1]);
+        assert_eq!(tofSwitchTofMode(false), false);
+
+        //Register for ToF events
+        let compHandle = tofGetCompHandle();
+        let retCall = unsafe { crate::register_priority_handler_for_messages(Some(ToFMessageHandler), compHandle) };
+
+        //Start Measurements
+        tofStartMeasurements();
+
+        //Create New Measurement Data
+        test_data[0] = 0x00;
+        appendNewTOFSensorReturn(&test_data[..1]);
+        let data_frame = createRandomMeasurementDataFrame(0);
+        appendNewTOFSensorReturn(&data_frame[..]);
+        assert_eq!(tofSpinISROnce(15), true);
+
+        //Handle ISR data internally
+        assert_eq!(message_queue::spin_priority_queue_once(), true);
+
+        //Handle New Buffer data externally
+        assert_eq!(message_queue::spin_priority_queue_once(), true);
+
+        //Check Handler Data
+        unsafe
+        {
+            assert_eq!(ToFCompHandle, compHandle);
+            assert_eq!(ToFMsgType, 1);
+            assert_eq!(TofArrayData[0].horizontal_size, 4);
+            assert_eq!(TofArrayData[0].vertical_size, 4);
+            assert_eq!(TofArrayData[0].is_populated, true);
+        }
+
+        //unregister message handler
+        let retVal = unsafe { crate::unregister_priority_handler_for_messages(compHandle, retCall) };
+        assert_eq!(retVal, 0);
+        unsafe{ crate::uninit_queue(1) };
     }
 
     #[test]
