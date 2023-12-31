@@ -512,8 +512,8 @@ static uint8_t TOF_SET_FACTORY_CAL_BLOB_NAME(uint8_t iter, char* blob_name)
 				fac_cal_strlen = strlen(tmf8828_fac_cal_1);
 				memcpy(blob_name, tmf8828_fac_cal_1, fac_cal_strlen);
 				blob_name[fac_cal_strlen] = '_';
-				blob_name[fac_cal_strlen] = (s_current_config + '0');
-				blob_name[fac_cal_strlen] = '\0';
+				blob_name[fac_cal_strlen + 1] = (s_current_config + '0');
+				blob_name[fac_cal_strlen + 2] = '\0';
 				return 0;
 			}
 			else
@@ -521,8 +521,8 @@ static uint8_t TOF_SET_FACTORY_CAL_BLOB_NAME(uint8_t iter, char* blob_name)
 				fac_cal_strlen = strlen(tmf8821_fac_cal);
 				memcpy(blob_name, tmf8821_fac_cal, fac_cal_strlen);
 				blob_name[fac_cal_strlen] = '_';
-				blob_name[fac_cal_strlen] = (s_current_config + '0');
-				blob_name[fac_cal_strlen] = '\0';
+				blob_name[fac_cal_strlen + 1] = (s_current_config + '0');
+				blob_name[fac_cal_strlen + 2] = '\0';
 				return 0;
 			}
 		}
@@ -531,8 +531,8 @@ static uint8_t TOF_SET_FACTORY_CAL_BLOB_NAME(uint8_t iter, char* blob_name)
 			fac_cal_strlen = strlen(tmf8828_fac_cal_2);
 			memcpy(blob_name, tmf8828_fac_cal_2, fac_cal_strlen);
 			blob_name[fac_cal_strlen] = '_';
-			blob_name[fac_cal_strlen] = (s_current_config + '0');
-			blob_name[fac_cal_strlen] = '\0';
+			blob_name[fac_cal_strlen + 1] = (s_current_config + '0');
+			blob_name[fac_cal_strlen + 2] = '\0';
 			return 0;
 		}
 		case 2:
@@ -540,17 +540,17 @@ static uint8_t TOF_SET_FACTORY_CAL_BLOB_NAME(uint8_t iter, char* blob_name)
 			fac_cal_strlen = strlen(tmf8828_fac_cal_3);
 			memcpy(blob_name, tmf8828_fac_cal_3, fac_cal_strlen);
 			blob_name[fac_cal_strlen] = '_';
-			blob_name[fac_cal_strlen] = (s_current_config + '0');
-			blob_name[fac_cal_strlen] = '\0';
+			blob_name[fac_cal_strlen + 1] = (s_current_config + '0');
+			blob_name[fac_cal_strlen + 2] = '\0';
 			return 0;
 		}
 		case 3:
 		{
-			fac_cal_strlen = strlen(tmf8828_fac_cal_3);
-			memcpy(blob_name, tmf8828_fac_cal_3, fac_cal_strlen);
+			fac_cal_strlen = strlen(tmf8828_fac_cal_4);
+			memcpy(blob_name, tmf8828_fac_cal_4, fac_cal_strlen);
 			blob_name[fac_cal_strlen] = '_';
-			blob_name[fac_cal_strlen] = (s_current_config + '0');
-			blob_name[fac_cal_strlen] = '\0';
+			blob_name[fac_cal_strlen + 1] = (s_current_config + '0');
+			blob_name[fac_cal_strlen + 2] = '\0';
 			return 0;
 		}
 		default:
