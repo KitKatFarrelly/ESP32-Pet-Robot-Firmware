@@ -158,27 +158,31 @@ static void uart_tof_cmds(uint8_t argc, char** argv)
     }
     else if(strcmp((char*) argv[1], (const char*) "factory_calibrate") == 0)
     {
-
+        //factory calibration
     }
     else if(strcmp((char*) argv[1], (const char*) "store_calibration") == 0)
     {
-
+        //store calibration
     }
     else if(strcmp((char*) argv[1], (const char*) "load_calibration") == 0)
     {
-
+        //load calibration
+    }
+    else if(strcmp((char*) argv[1], (const char*) "read_cal_flash") == 0)
+    {
+        //read calibration from flash
     }
     else if(strcmp((char*) argv[1], (const char*) "start_measurements") == 0)
     {
-
+        //start taking measurements from sensor
     }
     else if(strcmp((char*) argv[1], (const char*) "stop_measurements") == 0)
     {
-
+        //stop taking measurements from sensor
     }
     else if(strcmp((char*) argv[1], (const char*) "set_tof_mode") == 0)
     {
-        
+        //switch between tof8821 mode and tof8828 mode
     }
 }
 
