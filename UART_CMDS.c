@@ -156,6 +156,30 @@ static void uart_tof_cmds(uint8_t argc, char** argv)
         }
         TOF_WRITE(write_bytes, write_cnt);
     }
+    else if(strcmp((char*) argv[1], (const char*) "factory_calibrate") == 0)
+    {
+
+    }
+    else if(strcmp((char*) argv[1], (const char*) "store_calibration") == 0)
+    {
+
+    }
+    else if(strcmp((char*) argv[1], (const char*) "load_calibration") == 0)
+    {
+
+    }
+    else if(strcmp((char*) argv[1], (const char*) "start_measurements") == 0)
+    {
+
+    }
+    else if(strcmp((char*) argv[1], (const char*) "stop_measurements") == 0)
+    {
+
+    }
+    else if(strcmp((char*) argv[1], (const char*) "set_tof_mode") == 0)
+    {
+        
+    }
 }
 
 static void uart_flash_cmds(uint8_t argc, char** argv)
