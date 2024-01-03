@@ -33,7 +33,7 @@
 
 #define FW_HEADER_LEN 4
 #define MEASUREMENT_BUF_SIZE 8
-#define MEASUREMENT_DAT_SIZE 0x48
+#define MEASUREMENT_DAT_SIZE 0x84
 #define DEPTH_ARRAY_BUF_SIZE 20
 
 #define tmf8821_fac_cal		"tmf8821_fac"
@@ -878,7 +878,7 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 		}
 
 		//check that the measurement buffer is big enough
-		if(s_measurement_buffer[i][0x02] < 0x48)
+		if(s_measurement_buffer[i][0x02] < MEASUREMENT_DAT_SIZE)
 		{
 			ESP_LOGE(TAG, "measurement buffer %x is not large enough.", s_measurement_buffer[i][2]);
 			continue;
@@ -902,9 +902,9 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 					uint8_t v_iter = (7 - (j * 2)) - (convert_loop_cnt & 0x02);
 					uint8_t h_iter = (k * 4) + (2 * (convert_loop_cnt & 0x01));
 					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter] = s_measurement_buffer[i][0x19 + lin_val];
-					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter] += s_measurement_buffer[i][0x1A + lin_val] << 8;
-					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter + 1] = s_measurement_buffer[i][0x31 + lin_val];
-					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter + 1] += s_measurement_buffer[i][0x32 + lin_val] << 8;
+					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter] += (s_measurement_buffer[i][0x1A + lin_val] << 8);
+					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter + 1] = s_measurement_buffer[i][0x34 + lin_val];
+					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter + 1] += (s_measurement_buffer[i][0x35 + lin_val] << 8);
 				}
 			}
 		}

@@ -150,13 +150,13 @@ mod tests
     {
         let mut rng = rand::thread_rng();
 
-        let mut header: Vec<u8> = vec![0x20, 0, 0x48, 0, subcapture];
+        let mut header: Vec<u8> = vec![0x20, 0, 0x84, 0, subcapture];
 
-        let mut vals: Vec<u8> = (0..0x43).map(|_| rng.gen()).collect();
+        let mut vals: Vec<u8> = (0..0x79).map(|_| rng.gen()).collect();
 
         header.append(&mut vals);
 
-        assert_eq!(header.len(), 0x48);
+        assert_eq!(header.len(), 0x84);
 
         header
     }
