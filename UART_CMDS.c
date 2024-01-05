@@ -211,7 +211,7 @@ static void uart_flash_cmds(uint8_t argc, char** argv)
                 return;
             }
 
-            write_bytes[write_cnt] = (uart_get_hex_from_char(argv[2][0]) * 16);
+            write_bytes[write_cnt] = (uart_get_hex_from_char(argv[i][0]) * 16);
 
             if(uart_get_hex_from_char(argv[i][1]) == UART_INVALID_CHARACTER)
             {
@@ -219,7 +219,7 @@ static void uart_flash_cmds(uint8_t argc, char** argv)
                 return;
             }
 
-            write_bytes[write_cnt] += uart_get_hex_from_char(argv[2][1]);
+            write_bytes[write_cnt] += uart_get_hex_from_char(argv[i][1]);
 
             write_cnt++;
         }
@@ -228,7 +228,7 @@ static void uart_flash_cmds(uint8_t argc, char** argv)
             write_bytes[write_cnt] = 0;
         }
         ESP_LOGI(TAG, "Writing %d bytes to key %s: ", write_cnt, argv[2]);
-        FLASH_WRITE_TO_BLOB("factory", "flash", argv[2], write_bytes, write_cnt);
+        FLASH_WRITE_TO_BLOB(MAIN_PARTITION, "flash", argv[2], write_bytes, write_cnt);
     }
     else if(strcmp((char*) argv[1], (const char*) "read_flash") == 0)
     {
@@ -248,7 +248,7 @@ static void uart_flash_cmds(uint8_t argc, char** argv)
             }
         }
         ESP_LOGI(TAG, "Reading %d bytes from key %s", read_bytes, argv[2]);
-        uint8_t* read_data = FLASH_READ_FROM_BLOB("factory", "flash", argv[2], read_bytes);
+        uint8_t* read_data = FLASH_READ_FROM_BLOB(MAIN_PARTITION, "flash", argv[2], read_bytes);
         ESP_LOGI(TAG, "Read the following bytes: ");
         for(uint8_t i = 0; i < read_bytes; i++)
         {

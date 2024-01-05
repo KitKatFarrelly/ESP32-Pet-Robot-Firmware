@@ -99,7 +99,7 @@ uint8_t FLASH_WRITE_TO_BLOB(const char* partition_name, const char* namespace, c
     if (err != ESP_OK) 
     {
         nvs_close(write_handle);
-        ESP_LOGE(TAG, "unable to open partition.");
+        ESP_LOGE(TAG, "unable to open partition: err %u.", err);
         return 1;
     }
 

@@ -2,7 +2,7 @@
 #define H_FLASH_DRVR
 
 #define MAX_NUMBER_OF_BLOBS 100
-#define MAIN_PARTITION "factory"
+#define MAIN_PARTITION "nvs"
 
 typedef struct
 {
