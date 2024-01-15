@@ -73,6 +73,9 @@ void app_main(void)
 	//Init main nvs partition
 	FLASH_INIT_PARTITION(MAIN_PARTITION);
 
+	//Init priority queue
+	PRIORITY_MESSAGE_QUEUE_INIT();
+
 	UART_INIT();
 	
 	//Initialize all components

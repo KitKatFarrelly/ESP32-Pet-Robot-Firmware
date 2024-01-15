@@ -3,6 +3,12 @@
 
 #include "MESSAGE_QUEUE.h"
 
+#define tmf8821_fac_cal		"tmf8821_fac"
+#define tmf8828_fac_cal_1	"tmf8828_fac_1"
+#define tmf8828_fac_cal_2	"tmf8828_fac_2"
+#define tmf8828_fac_cal_3	"tmf8828_fac_3"
+#define tmf8828_fac_cal_4	"tmf8828_fac_4"
+
 typedef struct
 {
     uint16_t** depth_pixel_field;

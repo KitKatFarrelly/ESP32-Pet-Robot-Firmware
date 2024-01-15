@@ -36,12 +36,6 @@
 #define MEASUREMENT_DAT_SIZE 0x84
 #define DEPTH_ARRAY_BUF_SIZE 20
 
-#define tmf8821_fac_cal		"tmf8821_fac"
-#define tmf8828_fac_cal_1	"tmf8828_fac_1"
-#define tmf8828_fac_cal_2	"tmf8828_fac_2"
-#define tmf8828_fac_cal_3	"tmf8828_fac_3"
-#define tmf8828_fac_cal_4	"tmf8828_fac_4"
-
 //Commands
 
 //static uint8_t DOWNLOAD_INIT[5] = {0x08, 0x14, 0x01, 0x29, 0xC1};
@@ -891,6 +885,7 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 
 		//convert i2c data to depth pixel grid
 		//note: nested for loops like this are fucking unreadable, do better
+		//note 2: remember that tmf packets actually send the closest and second closest object in each pixel, should record both.
 		if(s_is_tmf8828_mode)
 		{
 			for(uint8_t j = 0; j < (s_ring_buffer_ptr[s_ring_buffer_iter].vertical_size / 2); j++)

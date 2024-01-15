@@ -29,6 +29,7 @@ static uint8_t buf[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1];
 static component_handle_t s_uart_component_handle = 0;
 static bool s_has_component_handle = false;
 static callback_handle_t UART_callback_handles[dispatcher_max] = {0};
+static callback_handle_t s_ToF_callback_handle;
 
 // helper functions
 
@@ -159,30 +160,148 @@ static void uart_tof_cmds(uint8_t argc, char** argv)
     else if(strcmp((char*) argv[1], (const char*) "factory_calibrate") == 0)
     {
         //factory calibration
+        uint8_t err = TOF_FACTORY_CALIBRATION();
+        ESP_LOGI(TAG, "Error code is: %u", err);
+
+        err = TOF_RETURN_CALIBRATION_STATUS();
+        ESP_LOGI(TAG, "calibration status is is: %x", err);
     }
     else if(strcmp((char*) argv[1], (const char*) "store_calibration") == 0)
     {
         //store calibration
+        uint8_t err = TOF_STORE_FACTORY_CALIBRATION();
+        ESP_LOGI(TAG, "Error code is: %u", err);
     }
     else if(strcmp((char*) argv[1], (const char*) "load_calibration") == 0)
     {
         //load calibration
+        uint8_t err = TOF_LOAD_FACTORY_CALIBRATION();
+        ESP_LOGI(TAG, "Error code is: %u", err);
     }
     else if(strcmp((char*) argv[1], (const char*) "read_cal_flash") == 0)
     {
         //read calibration from flash
+        if(argc < 3)
+        {
+            ESP_LOGE(TAG, "Incorrect size args");
+            return;
+        }
+
+        uint8_t blob_val = (argv[2][0] - '0');
+
+        char fac_cal_blob_name[20] = {0};
+
+        size_t fac_cal_strlen = 0;
+
+        switch(blob_val)
+        {
+            case 0:
+            {
+                fac_cal_strlen = strlen(tmf8828_fac_cal_1);
+				memcpy(fac_cal_blob_name, tmf8828_fac_cal_1, fac_cal_strlen);
+				fac_cal_blob_name[fac_cal_strlen] = '_';
+				fac_cal_blob_name[fac_cal_strlen + 1] = ('0');
+				fac_cal_blob_name[fac_cal_strlen + 2] = '\0';
+                break;
+            }
+            case 1:
+            {
+                fac_cal_strlen = strlen(tmf8828_fac_cal_1);
+				memcpy(fac_cal_blob_name, tmf8828_fac_cal_1, fac_cal_strlen);
+				fac_cal_blob_name[fac_cal_strlen] = '_';
+				fac_cal_blob_name[fac_cal_strlen + 1] = ('0');
+				fac_cal_blob_name[fac_cal_strlen + 2] = '\0';
+                break;
+            }
+            case 2:
+            {
+                fac_cal_strlen = strlen(tmf8828_fac_cal_1);
+				memcpy(fac_cal_blob_name, tmf8828_fac_cal_1, fac_cal_strlen);
+				fac_cal_blob_name[fac_cal_strlen] = '_';
+				fac_cal_blob_name[fac_cal_strlen + 1] = ('0');
+				fac_cal_blob_name[fac_cal_strlen + 2] = '\0';
+                break;
+            }
+            case 3:
+            {
+                fac_cal_strlen = strlen(tmf8828_fac_cal_1);
+				memcpy(fac_cal_blob_name, tmf8828_fac_cal_1, fac_cal_strlen);
+				fac_cal_blob_name[fac_cal_strlen] = '_';
+				fac_cal_blob_name[fac_cal_strlen + 1] = ('0');
+				fac_cal_blob_name[fac_cal_strlen + 2] = '\0';
+                break;
+            }
+            case 4:
+            {
+                fac_cal_strlen = strlen(tmf8828_fac_cal_1);
+				memcpy(fac_cal_blob_name, tmf8828_fac_cal_1, fac_cal_strlen);
+				fac_cal_blob_name[fac_cal_strlen] = '_';
+				fac_cal_blob_name[fac_cal_strlen + 1] = ('0');
+				fac_cal_blob_name[fac_cal_strlen + 2] = '\0';
+                break;
+            }
+            default:
+            {
+                ESP_LOGE(TAG, "blob val must be between 0 and 4");
+                return;
+            }
+        }
+
+        if(FLASH_DOES_KEY_EXIST(MAIN_PARTITION, "tof", fac_cal_blob_name) != 0xC0)
+        {
+            ESP_LOGE(TAG, "selected calibration blob is not saved");
+            return;
+        }
+        uint8_t* read_data = FLASH_READ_FROM_BLOB(MAIN_PARTITION, "tof", fac_cal_blob_name, 0xC0);
+        ESP_LOGI(TAG, "Read the following bytes: ");
+        for(uint8_t i = 0; i < 0x0C; i++)
+        {
+            ESP_LOGI(TAG, "%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x", 
+                    read_data[(i * 16) +  0], read_data[(i * 16) +  1], read_data[(i * 16) +  2], read_data[(i * 16) +  3],
+                    read_data[(i * 16) +  4], read_data[(i * 16) +  5], read_data[(i * 16) +  6], read_data[(i * 16) +  7],
+                    read_data[(i * 16) +  8], read_data[(i * 16) +  9], read_data[(i * 16) + 10], read_data[(i * 16) + 11],
+                    read_data[(i * 16) + 12], read_data[(i * 16) + 13], read_data[(i * 16) + 14], read_data[(i * 16) + 15]);
+        }
+        free(read_data);
     }
     else if(strcmp((char*) argv[1], (const char*) "start_measurements") == 0)
     {
         //start taking measurements from sensor
+        s_ToF_callback_handle = register_priority_handler_for_messages(uart_msg_queue_handler, ToF_public_component);
+        uint8_t err = TOF_START_MEASUREMENTS();
+        ESP_LOGI(TAG, "Error code is: %u", err);
     }
     else if(strcmp((char*) argv[1], (const char*) "stop_measurements") == 0)
     {
         //stop taking measurements from sensor
+        uint8_t err = TOF_STOP_MEASUREMENTS();
+        ESP_LOGI(TAG, "Error code is: %u", err);
+        err = unregister_priority_handler_for_messages(ToF_public_component, s_ToF_callback_handle);
+        ESP_LOGI(TAG, "Unreigster error code is: %u", err);
+        s_ToF_callback_handle = 0;
     }
     else if(strcmp((char*) argv[1], (const char*) "set_tof_mode") == 0)
     {
         //switch between tof8821 mode and tof8828 mode
+        if(argc < 3)
+        {
+            ESP_LOGE(TAG, "Incorrect size args");
+            return;
+        }
+        bool set_mode = false;
+        if(argv[2][0] = '1')
+        {
+            set_mode = true;
+        }
+        bool mode_val = TOF_SET_TMF8828_MODE(set_mode);
+        if(mode_val)
+        {
+            ESP_LOGI(TAG, "Mode is now tmf8828.");
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Mode is now tmf8821.");
+        }
     }
 }
 
@@ -576,6 +695,10 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
     for(int i = 0; i < message_size; i++)
     {
         ESP_LOGI(TAG, "%x", output_data[i]);
+    }
+    if(component_type == ToF_public_component && message_type == TOF_MSG_NEW_DEPTH_ARRAY)
+    {
+        //write TOF_DATA_t to console
     }
 }
 
