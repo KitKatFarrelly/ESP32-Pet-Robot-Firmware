@@ -289,7 +289,7 @@ static void uart_tof_cmds(uint8_t argc, char** argv)
             return;
         }
         bool set_mode = false;
-        if(argv[2][0] = '1')
+        if(argv[2][0] == '1')
         {
             set_mode = true;
         }
@@ -706,7 +706,7 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
     if(component_type == ToF_public_component && message_type == TOF_MSG_NEW_DEPTH_ARRAY)
     {
         //write TOF_DATA_t to console
-        TOF_DATA_t* tof_data = *message_data;
+        TOF_DATA_t* tof_data = *(TOF_DATA_t**) message_data;
         uint8_t h_size = tof_data->horizontal_size;
         uint8_t v_size = tof_data->vertical_size;
         uint16_t** array_ptr = tof_data->depth_pixel_field;
