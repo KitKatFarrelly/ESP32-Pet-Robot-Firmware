@@ -699,6 +699,26 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
     if(component_type == ToF_public_component && message_type == TOF_MSG_NEW_DEPTH_ARRAY)
     {
         //write TOF_DATA_t to console
+        TOF_DATA_t* tof_data = *message_data;
+        uint8_t h_size = tof_data->horizontal_size;
+        uint8_t v_size = tof_data->vertical_size;
+        uint16_t** array_ptr = tof_data->depth_pixel_field;
+        ESP_LOGI(TAG, "outputting %ux%u depth array:", h_size, v_size);
+        for(uint8_t j = 0; j < v_size; j++)
+        {
+            if(h_size == 8)
+            {
+                ESP_LOGI(TAG, "%04u %04u %04u %04u %04u %04u %04u %04u", 
+                        array_ptr[j][0], array_ptr[j][1], array_ptr[j][2], array_ptr[j][3],
+                        array_ptr[j][4], array_ptr[j][5], array_ptr[j][6], array_ptr[j][7]);
+            }
+            else if(h_size == 4)
+            {
+                ESP_LOGI(TAG, "%04u %04u %04u %04u", 
+                        array_ptr[j][0], array_ptr[j][1], array_ptr[j][2], array_ptr[j][3]);
+            }
+            
+        }
     }
 }
 
