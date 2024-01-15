@@ -603,6 +603,13 @@ static void uart_msg_queue_cmds(uint8_t argc, char** argv)
             ESP_LOGI(TAG, "successfully deleted all queue component handles.");
         }
     }
+    else if(strcmp((char*) argv[1], (const char*) "init_normal_queue") == 0)
+    {
+        MESSAGE_QUEUE_INIT();
+        bool is_active = check_is_queue_active(0);
+        bool is_priority_active = check_is_queue_active(1);
+        ESP_LOGI(TAG, "normal queue active: %u. priority queue active: %u.", is_active, is_priority_active);
+    }
 }
 
 static uint8_t uart_get_hex_from_char(char to_convert)
