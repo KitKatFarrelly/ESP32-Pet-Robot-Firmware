@@ -74,7 +74,7 @@ void app_main(void)
 	FLASH_INIT_PARTITION(MAIN_PARTITION);
 
 	//Init priority queue
-	PRIORITY_MESSAGE_QUEUE_INIT();
+	//PRIORITY_MESSAGE_QUEUE_INIT();
 
 	UART_INIT();
 	

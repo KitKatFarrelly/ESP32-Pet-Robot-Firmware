@@ -162,7 +162,7 @@ void TOF_INIT(void)
 	TOF_SET_TMF8828_MODE(true);
 
 	//TOF INTERRUPT HANDLER
-	gpio_isr_handler_add(TOF_INTR, TOF_MEASUREMENT_INTR_HANDLE, NULL);
+	//gpio_isr_handler_add(TOF_INTR, TOF_MEASUREMENT_INTR_HANDLE, NULL);
 }
 
 bool TOF_SET_TMF8828_MODE(bool set_tmf8828)
@@ -437,9 +437,22 @@ uint8_t TOF_RETURN_CALIBRATION_STATUS(void)
 uint8_t TOF_START_MEASUREMENTS(void)
 {
 	uint8_t write_data[2] = {0, 0};
+	//Write Interrupt Settings
+	//For example setting interrupts for results with this
+	write_data[0] = 0xE2;
+	write_data[1] = 0x02;
+	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
+
+	//Clear pending interrupts
+	write_data[0] = 0xE1;
+	write_data[1] = 0xFF;
+	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
+
 	write_data[0] = 0x08;
 	write_data[1] = 0x10;
 	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
+
+	TOF_WAIT_UNTIL_READY_APP(3);
 	return 0;
 }
 
@@ -449,6 +462,8 @@ uint8_t TOF_STOP_MEASUREMENTS(void)
 	write_data[0] = 0x08;
 	write_data[1] = 0xFF;
 	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
+
+	TOF_WAIT_UNTIL_READY_APP(3);
 	return 0;
 }
 
@@ -872,7 +887,7 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 		}
 
 		//check that the measurement buffer is big enough
-		if(s_measurement_buffer[i][0x02] < MEASUREMENT_DAT_SIZE)
+		if(s_measurement_buffer[i][0x02] < (MEASUREMENT_DAT_SIZE - 4))
 		{
 			ESP_LOGE(TAG, "measurement buffer %x is not large enough.", s_measurement_buffer[i][2]);
 			continue;

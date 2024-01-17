@@ -134,7 +134,7 @@ static void uart_tof_cmds(uint8_t argc, char** argv)
                 return;
             }
 
-            write_bytes[write_cnt] = (uart_get_hex_from_char(argv[2][0]) * 16);
+            write_bytes[write_cnt] = (uart_get_hex_from_char(argv[i][0]) * 16);
 
             if(uart_get_hex_from_char(argv[i][1]) == UART_INVALID_CHARACTER)
             {
@@ -142,7 +142,7 @@ static void uart_tof_cmds(uint8_t argc, char** argv)
                 return;
             }
 
-            write_bytes[write_cnt] += uart_get_hex_from_char(argv[2][1]);
+            write_bytes[write_cnt] += uart_get_hex_from_char(argv[i][1]);
 
             write_cnt++;
         }
@@ -556,8 +556,11 @@ static void uart_msg_queue_cmds(uint8_t argc, char** argv)
             message_info_t message;
             message.component_handle = s_uart_component_handle;
             message.message_type = 0;
-            message.message_data = malloc(sizeof(char) * (strlen(argv[3]) + 1));
-            memcpy(message.message_data, argv[3], sizeof(char) * strlen(argv[3]));
+            char* uart_msg = malloc(sizeof(char) * (strlen(argv[3]) + 1));
+            memcpy(uart_msg, argv[3], sizeof(char) * strlen(argv[3]));
+            uart_msg[strlen(argv[3])] = '\0';
+            message.message_data = (void*) uart_msg;
+            message.message_size = sizeof(char) * (strlen(argv[3]) + 1);
             if(strcmp((char*) argv[2], (const char*) "priority") == 0)
             {
                 if(check_is_queue_active(1))
@@ -696,13 +699,15 @@ static uint8_t uart_convert_str_to_args(const uint8_t * cmd_buf, char** argv_ptr
 static void uart_msg_queue_handler(component_handle_t component_type, uint8_t message_type, void* message_data, size_t message_size)
 {
     dispatcher_type_t dispatcher = uart_get_dispatcher_from_component(component_type);
-    ESP_LOGI(TAG, "message from %s with message type %u.", uart_return_string_from_dispatcher(dispatcher), message_type);
-    ESP_LOGI(TAG, "message data:");
-    uint8_t* output_data = (uint8_t*) message_data;
-    for(int i = 0; i < message_size; i++)
+    ESP_LOGI(TAG, "message from %s with message type %u and size %u.", uart_return_string_from_dispatcher(dispatcher), message_type, message_size);
+    if(message_size > 200)
     {
-        ESP_LOGI(TAG, "%x", output_data[i]);
+        ESP_LOGE(TAG, "message size too large:");
+        return;
     }
+    ESP_LOGI(TAG, "message data:");
+    char* output_data = (char*) message_data;
+    ESP_LOGI(TAG, "%s", output_data);
     if(component_type == ToF_public_component && message_type == TOF_MSG_NEW_DEPTH_ARRAY)
     {
         //write TOF_DATA_t to console
