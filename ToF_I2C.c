@@ -8,6 +8,7 @@
 #include "esp_log.h"
 #include "driver/i2c.h"
 #include "driver/gpio.h"
+#include "freertos/timers.h"
 #endif
 
 #include "ToF_I2C.h"
@@ -71,6 +72,7 @@ static uint8_t s_measurement_buffer[MEASUREMENT_BUF_SIZE][MEASUREMENT_DAT_SIZE] 
 static uint8_t s_measurement_flags = 0;
 static uint8_t s_current_config = 0;
 static component_handle_t s_internal_comp_handle = 0;
+TimerHandle_t s_tof_timer = NULL;
 
 // Externs
 
@@ -78,7 +80,7 @@ component_handle_t ToF_public_component = 0;
 
 // Interrupt Handler
 
-static void TOF_MEASUREMENT_INTR_HANDLE(void* arg);
+static void TOF_MEASUREMENT_INTR_HANDLE(TimerHandle_t xTimer);
 
 // Task Handling
 
@@ -148,8 +150,8 @@ void TOF_INIT(void)
 
 	if(check_is_queue_active(1))
 	{
-		create_handle_for_component(&ToF_public_component);
 		create_handle_for_component(&s_internal_comp_handle);
+		create_handle_for_component(&ToF_public_component);
 		register_priority_handler_for_messages(TOF_INTERNAL_MESSAGE_HANDLER, s_internal_comp_handle);
 	}
 	
@@ -163,6 +165,9 @@ void TOF_INIT(void)
 
 	//TOF INTERRUPT HANDLER
 	//gpio_isr_handler_add(TOF_INTR, TOF_MEASUREMENT_INTR_HANDLE, NULL);
+
+	//Try Polling instead
+	s_tof_timer = xTimerCreate("tof_timer", 3 / portTICK_PERIOD_MS, pdTRUE, (void*) 0, TOF_MEASUREMENT_INTR_HANDLE);
 }
 
 bool TOF_SET_TMF8828_MODE(bool set_tmf8828)
@@ -453,12 +458,21 @@ uint8_t TOF_START_MEASUREMENTS(void)
 	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
 
 	TOF_WAIT_UNTIL_READY_APP(3);
+
+	if(!xTimerIsTimerActive(s_tof_timer))
+	{
+		xTimerStart(s_tof_timer, 0);
+	}
 	return 0;
 }
 
 uint8_t TOF_STOP_MEASUREMENTS(void)
 {
 	uint8_t write_data[2] = {0, 0};
+	if(xTimerIsTimerActive(s_tof_timer))
+	{
+		xTimerStop(s_tof_timer, 0);
+	}
 	write_data[0] = 0x08;
 	write_data[1] = 0xFF;
 	if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
@@ -959,9 +973,8 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 	return 0;
 }
 
-static void TOF_MEASUREMENT_INTR_HANDLE(void* arg)
+static void TOF_MEASUREMENT_INTR_HANDLE(TimerHandle_t xTimer)
 {
-	uint8_t number_of_measurements = (s_is_tmf8828_mode) ? 4 : 1;
 	uint8_t write_data[2] = {0, 0};
 	uint8_t read_data[1] = {0};
 
@@ -977,6 +990,8 @@ static void TOF_MEASUREMENT_INTR_HANDLE(void* arg)
 	if(TOF_READ_WRITE_APP(read_data, 1, write_data, 1, 1) != ESP_OK) return;
 
 	ESP_LOGI(TAG, "interrupts that need to be cleared are the following: %u.", read_data[0]);
+
+	if(!read_data[0]) return;
 	
 	// Read out Measurement
 	write_data[0] = 0x20;
@@ -1005,7 +1020,7 @@ static void TOF_MEASUREMENT_INTR_HANDLE(void* arg)
 
 	//Clear pending interrupts
 	write_data[0] = 0xE1;
-	write_data[1] = 0x02;
+	write_data[1] = read_data[0];
 	if(TOF_WRITE_APP(write_data, 2, 1) != ESP_OK) return;
 
 	ESP_LOGI(TAG, "Read measurement successfully.");
