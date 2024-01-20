@@ -723,11 +723,13 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
                 ESP_LOGI(TAG, "%04u %04u %04u %04u %04u %04u %04u %04u", 
                         array_ptr[j][0], array_ptr[j][1], array_ptr[j][2], array_ptr[j][3],
                         array_ptr[j][4], array_ptr[j][5], array_ptr[j][6], array_ptr[j][7]);
+                vTaskDelay(5 / portTICK_PERIOD_MS);
             }
             else if(h_size == 4)
             {
                 ESP_LOGI(TAG, "%04u %04u %04u %04u", 
                         array_ptr[j][0], array_ptr[j][1], array_ptr[j][2], array_ptr[j][3]);
+                vTaskDelay(5 / portTICK_PERIOD_MS);
             }
             
         }

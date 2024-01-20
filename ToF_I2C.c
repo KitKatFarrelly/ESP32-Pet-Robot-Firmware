@@ -33,9 +33,9 @@
 //Defines
 
 #define FW_HEADER_LEN 4
-#define MEASUREMENT_BUF_SIZE 8
+#define MEASUREMENT_BUF_SIZE 20
 #define MEASUREMENT_DAT_SIZE 0x84
-#define DEPTH_ARRAY_BUF_SIZE 20
+#define DEPTH_ARRAY_BUF_SIZE 8
 
 //Commands
 
@@ -69,7 +69,7 @@ static uint8_t s_ring_buffer_iter = 0;
 static uint8_t s_measurement_iter = 0;
 static uint8_t s_starting_iter = 0;
 static uint8_t s_measurement_buffer[MEASUREMENT_BUF_SIZE][MEASUREMENT_DAT_SIZE] = {0};
-static uint8_t s_measurement_flags = 0;
+static uint32_t s_measurement_flags = 0;
 static uint8_t s_current_config = 0;
 static component_handle_t s_internal_comp_handle = 0;
 TimerHandle_t s_tof_timer = NULL;
@@ -167,7 +167,7 @@ void TOF_INIT(void)
 	//gpio_isr_handler_add(TOF_INTR, TOF_MEASUREMENT_INTR_HANDLE, NULL);
 
 	//Try Polling instead
-	s_tof_timer = xTimerCreate("tof_timer", 3 / portTICK_PERIOD_MS, pdTRUE, (void*) 0, TOF_MEASUREMENT_INTR_HANDLE);
+	s_tof_timer = xTimerCreate("tof_timer", 100 / portTICK_PERIOD_MS, pdTRUE, (void*) 0, TOF_MEASUREMENT_INTR_HANDLE);
 }
 
 bool TOF_SET_TMF8828_MODE(bool set_tmf8828)
@@ -955,6 +955,8 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 		s_starting_iter -= MEASUREMENT_BUF_SIZE;
 	}
 
+	ESP_LOGI(TAG, "starting iter is now: %u, flags are %lx.", s_starting_iter, s_measurement_flags);
+
 	s_ring_buffer_ptr[s_ring_buffer_iter].is_populated = true;
 	message_info_t depth_array_msg;
 	depth_array_msg.message_data = malloc(sizeof(TOF_DATA_t**));
@@ -1023,5 +1025,5 @@ static void TOF_MEASUREMENT_INTR_HANDLE(TimerHandle_t xTimer)
 	write_data[1] = read_data[0];
 	if(TOF_WRITE_APP(write_data, 2, 1) != ESP_OK) return;
 
-	ESP_LOGI(TAG, "Read measurement successfully.");
+	ESP_LOGI(TAG, "Read measurement successfully, measurement buffer at %u.", s_measurement_iter);
 }
