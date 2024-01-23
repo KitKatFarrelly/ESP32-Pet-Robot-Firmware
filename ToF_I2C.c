@@ -167,7 +167,7 @@ void TOF_INIT(void)
 	//gpio_isr_handler_add(TOF_INTR, TOF_MEASUREMENT_INTR_HANDLE, NULL);
 
 	//Try Polling instead
-	s_tof_timer = xTimerCreate("tof_timer", 100 / portTICK_PERIOD_MS, pdTRUE, (void*) 0, TOF_MEASUREMENT_INTR_HANDLE);
+	s_tof_timer = xTimerCreate("tof_timer", 5 / portTICK_PERIOD_MS, pdTRUE, (void*) 0, TOF_MEASUREMENT_INTR_HANDLE);
 }
 
 bool TOF_SET_TMF8828_MODE(bool set_tmf8828)
@@ -838,9 +838,9 @@ static void TOF_INTERNAL_MESSAGE_HANDLER(component_handle_t comp_handle, uint8_t
 static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 {
 	uint8_t number_of_measurements = (s_is_tmf8828_mode) ? 4 : 1;
-	ESP_LOGI(TAG, "converting i2c buffer to array, in 8828 mode: %u.", s_is_tmf8828_mode);
+	//ESP_LOGI(TAG, "converting i2c buffer to array, in 8828 mode: %u.", s_is_tmf8828_mode);
 
-	ESP_LOGI(TAG, "operating on ring buffer pointer: %p.", &(s_ring_buffer_ptr[s_ring_buffer_iter]));
+	//ESP_LOGI(TAG, "operating on ring buffer pointer: %p.", &(s_ring_buffer_ptr[s_ring_buffer_iter]));
 
 	//temporarily using this just to check that we have enough data
 	uint8_t ending_iter = s_measurement_iter;
@@ -863,7 +863,7 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 	}
 
 	//Do the actual conversion here
-	ending_iter = s_starting_iter + number_of_measurements - 1;
+	ending_iter = s_starting_iter + number_of_measurements;
 	if(ending_iter >= MEASUREMENT_BUF_SIZE)
 	{
 		ending_iter -= MEASUREMENT_BUF_SIZE;
@@ -893,7 +893,7 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 		s_ring_buffer_ptr[s_ring_buffer_iter].vertical_size = 4;
 	}
 
-	for(uint8_t i = s_starting_iter; i == ending_iter; i++)
+	for(uint8_t i = s_starting_iter; i != ending_iter; i++)
 	{
 		if(i >= MEASUREMENT_BUF_SIZE)
 		{
@@ -909,8 +909,8 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 
 		//determines subcapture of the data. used in 8x8 mode.
 		uint8_t convert_loop_cnt = s_measurement_buffer[i][0x04];
-		ESP_LOGI(TAG, "buffer capture value is %x, subcapture %x.", convert_loop_cnt, convert_loop_cnt & 0x03);
-		ESP_LOGI(TAG, "number of valid results is %u.", s_measurement_buffer[i][0x06]);
+		//ESP_LOGI(TAG, "buffer capture value is %x, subcapture %x.", convert_loop_cnt, convert_loop_cnt & 0x03);
+		//ESP_LOGI(TAG, "number of valid results is %u.", s_measurement_buffer[i][0x06]);
 
 		//convert i2c data to depth pixel grid
 		//note: nested for loops like this are fucking unreadable, do better
@@ -991,7 +991,7 @@ static void TOF_MEASUREMENT_INTR_HANDLE(TimerHandle_t xTimer)
 	write_data[0] = 0xE1;
 	if(TOF_READ_WRITE_APP(read_data, 1, write_data, 1, 1) != ESP_OK) return;
 
-	ESP_LOGI(TAG, "interrupts that need to be cleared are the following: %u.", read_data[0]);
+	//ESP_LOGI(TAG, "interrupts that need to be cleared are the following: %u.", read_data[0]);
 
 	if(!read_data[0]) return;
 	
@@ -1025,5 +1025,5 @@ static void TOF_MEASUREMENT_INTR_HANDLE(TimerHandle_t xTimer)
 	write_data[1] = read_data[0];
 	if(TOF_WRITE_APP(write_data, 2, 1) != ESP_OK) return;
 
-	ESP_LOGI(TAG, "Read measurement successfully, measurement buffer at %u.", s_measurement_iter);
+	//ESP_LOGI(TAG, "Read measurement successfully, measurement buffer at %u.", s_measurement_iter);
 }
