@@ -33,13 +33,11 @@
 //Defines
 
 #define FW_HEADER_LEN 4
-#define MEASUREMENT_BUF_SIZE 20
+#define MEASUREMENT_BUF_SIZE 12
 #define MEASUREMENT_DAT_SIZE 0x84
 #define DEPTH_ARRAY_BUF_SIZE 8
 
 //Commands
-
-//static uint8_t DOWNLOAD_INIT[5] = {0x08, 0x14, 0x01, 0x29, 0xC1};
 
 static uint8_t SET_FW_ADDR[6] = {0x08, 0x43, 0x02, 0x00, 0x00, 0xBA};
 

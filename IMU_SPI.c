@@ -13,7 +13,7 @@
 
 #include "IMU_SPI.h"
 
-//SPI definitions - TODO: 
+// SPI definitions - TODO: 
 #define PIN_NUM_MISO GPIO_NUM_37
 #define PIN_NUM_MOSI GPIO_NUM_35
 #define PIN_NUM_CLK  GPIO_NUM_36
@@ -21,13 +21,31 @@
 #define TRANS_SIZE   8
 #define DMA_CHAN     2
 
+#define IMU_INT1 	GPIO_NUM_38
+#define IMU_INT2 	GPIO_NUM_39
+
+// Defines
+
+#define FW_HEADER_LEN 4
+#define IMU_BUF_SIZE 20
+#define IMU_DAT_SIZE 0x0F
+#define POSITION_BUF_SIZE 8
+
 static const char *TAG = "SPI LOG";
 
 // static variables
 static spi_device_handle_t s_spi_handle = NULL;
+static uint8_t s_imu_data_buffer[IMU_BUF_SIZE][IMU_DAT_SIZE] = {0};
+static component_handle_t s_imu_private_handle = 0;
 
-//static functions
+// static functions
 static void imu_configuration_init(void);
+static uint8_t imu_write_config_chunk(uint16_t index);
+static uint8_t imu_check_interrupts(void);
+static uint8_t imu_read_accel_gyro_dat(bool read_accel, bool read_gyro);
+
+// Externs
+component_handle_t imu_public_component = 0;
 
 #ifndef FUNCTIONAL_TESTS
 
@@ -94,9 +112,69 @@ void IMU_INIT(void)
 	ESP_ERROR_CHECK(ret);
 
 #endif
+
+	// Step 1: Run self test
+
+	// Step 2: If successful, write config file
+	imu_configuration_init();
+}
+
+void imu_enable_accel(bool enable)
+{
+	//enable/disable acclerometer on sensor
+}
+
+void imu_enable_gyro(bool enable)
+{
+	//enable/disable gyro on sensor
+}
+
+uint8_t imu_reset(void)
+{
+	//soft reset
+}
+
+uint8_t imu_check_status(void)
+{
+	//checks status register of imu
+}
+
+uint8_t imu_check_error(void)
+{
+	//checks error register of imu
+}
+
+uint8_t imu_set_latched_mode(bool enable)
+{
+	//sets latched mode for imu
+}
+
+uint8_t imu_set_features(uint8_t feature_flags)
+{
+	//set features from a list of flags
 }
 
 static void imu_configuration_init(void)
 {
 	//placeholder
+}
+
+uint8_t imu_start(void)
+{
+	//start reading data from imu
+}
+
+uint8_t imu_stop(void)
+{
+	//stop reading data from imu
+}
+
+static uint8_t imu_write_config_chunk(uint16_t index)
+{
+	//Write config chunk to IMU based on config file
+}
+
+static void imu_check_interrupts(void)
+{
+	//Read interrupt values and if data is available read imu data
 }
