@@ -57,6 +57,7 @@ static bool uart_does_component_have_a_handle(dispatcher_type_t dispatcher);
 static void uart_tof_cmds(uint8_t argc, char** argv);
 static void uart_flash_cmds(uint8_t argc, char** argv);
 static void uart_msg_queue_cmds(uint8_t argc, char** argv);
+static void uart_imu_cmds(uint8_t argc, char** argv);
 
 // function defs
 
@@ -615,6 +616,23 @@ static void uart_msg_queue_cmds(uint8_t argc, char** argv)
     }
 }
 
+static void uart_imu_cmds(uint8_t argc, char** argv)
+{
+    if(argc < 2)
+    {
+        ESP_LOGE(TAG, "incorrect number of args");
+        return;
+    }
+    if(strcmp((char*) argv[1], (const char*) "imu_read") == 0)
+    {
+        //placeholder
+    }
+    else if(strcmp((char*) argv[1], (const char*) "imu_write") == 0)
+    {
+        //placeholder
+    }
+}
+
 static uint8_t uart_get_hex_from_char(char to_convert)
 {
     if(to_convert >= '0' && to_convert <= '9')
@@ -833,7 +851,7 @@ static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event)
         }
         case imu:
         {
-            ESP_LOGI(TAG, "IMU commands not implemented");
+            uart_imu_cmds(argc, argv);
             break;
         }
         case motor:
