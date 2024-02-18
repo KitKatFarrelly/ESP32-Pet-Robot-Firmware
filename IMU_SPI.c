@@ -76,7 +76,20 @@ void IMU_WRITE(uint8_t* IMU_IN, uint8_t IMU_REG, uint8_t in_size)
 	{
 		t.tx_data[i] = *(IMU_IN + i);
 	}
+	t.length = 8 * in_size;
 	t.flags = SPI_TRANS_USE_TXDATA;
+	t.cmd = IMU_REG;
+    ret=spi_device_polling_transmit(s_spi_handle, &t);  //Transmit!
+    assert(ret==ESP_OK);            //Should have had no issues.
+}
+
+void IMU_WRITE_LONG(uint8_t* IMU_IN, uint8_t IMU_REG, uint8_t in_size)
+{
+	esp_err_t ret;
+    spi_transaction_t t;
+    memset(&t, 0, sizeof(t));       //Zero out the transaction
+	t.tx_buffer = IMU_IN;
+	t.length = 8 * in_size;
 	t.cmd = IMU_REG;
     ret=spi_device_polling_transmit(s_spi_handle, &t);  //Transmit!
     assert(ret==ESP_OK);            //Should have had no issues.

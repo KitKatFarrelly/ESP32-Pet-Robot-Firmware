@@ -18,6 +18,8 @@ void IMU_READ(uint8_t* IMU_OUT, uint8_t IMU_REG, uint8_t out_size);
 
 void IMU_WRITE(uint8_t* IMU_IN, uint8_t IMU_REG, uint8_t in_size);
 
+void IMU_WRITE_LONG(uint8_t* IMU_IN, uint8_t IMU_REG, uint8_t in_size);
+
 void imu_enable_accel(bool enable);
 
 void imu_enable_gyro(bool enable);
