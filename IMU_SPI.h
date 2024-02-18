@@ -1,6 +1,8 @@
 #ifndef H_IMU_DRVR
 #define H_IMU_DRVR
 
+#include "MESSAGE_QUEUE.h"
+
 extern component_handle_t imu_public_component;
 
 typedef enum

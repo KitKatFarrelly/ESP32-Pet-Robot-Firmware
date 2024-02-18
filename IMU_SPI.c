@@ -41,7 +41,7 @@ static component_handle_t s_imu_private_handle = 0;
 // static functions
 static void imu_configuration_init(void);
 static uint8_t imu_write_config_chunk(uint16_t index);
-static uint8_t imu_check_interrupts(void);
+static void imu_check_interrupts(void);
 static uint8_t imu_read_accel_gyro_dat(bool read_accel, bool read_gyro);
 
 // Externs
@@ -62,8 +62,8 @@ void IMU_READ(uint8_t* IMU_OUT, uint8_t IMU_REG, uint8_t out_size)
     assert(ret==ESP_OK);            //Should have had no issues.
     for(uint8_t i = 0; i < out_size; i++)
 	{
-		ESP_LOGI(TAG, "SPI data %u is %x", i, t.rx_data[i]);
-		IMU_OUT[i] = t.rx_data[i];
+		ESP_LOGI(TAG, "SPI data %u is %x", i, t.base.rx_data[i]);
+		IMU_OUT[i] = t.base.rx_data[i];
 	}
 }
 
@@ -72,8 +72,10 @@ void IMU_WRITE(uint8_t* IMU_IN, uint8_t IMU_REG, uint8_t in_size)
 	esp_err_t ret;
     spi_transaction_t t;
     memset(&t, 0, sizeof(t));       //Zero out the transaction
-	t.txlength = in_size * 8;
-	t.tx_data = IMU_IN;
+	for(uint8_t i = 0; i < in_size && i < 4; i++)
+	{
+		t.tx_data[i] = *(IMU_IN + i);
+	}
 	t.flags = SPI_TRANS_USE_TXDATA;
 	t.cmd = IMU_REG;
     ret=spi_device_polling_transmit(s_spi_handle, &t);  //Transmit!
@@ -132,26 +134,31 @@ void imu_enable_gyro(bool enable)
 uint8_t imu_reset(void)
 {
 	//soft reset
+	return 0;
 }
 
 uint8_t imu_check_status(void)
 {
 	//checks status register of imu
+	return 0;
 }
 
 uint8_t imu_check_error(void)
 {
 	//checks error register of imu
+	return 0;
 }
 
 uint8_t imu_set_latched_mode(bool enable)
 {
 	//sets latched mode for imu
+	return 0;
 }
 
 uint8_t imu_set_features(uint8_t feature_flags)
 {
 	//set features from a list of flags
+	return 0;
 }
 
 static void imu_configuration_init(void)
@@ -162,16 +169,19 @@ static void imu_configuration_init(void)
 uint8_t imu_start(void)
 {
 	//start reading data from imu
+	return 0;
 }
 
 uint8_t imu_stop(void)
 {
 	//stop reading data from imu
+	return 0;
 }
 
 static uint8_t imu_write_config_chunk(uint16_t index)
 {
 	//Write config chunk to IMU based on config file
+	return 0;
 }
 
 static void imu_check_interrupts(void)

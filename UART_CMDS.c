@@ -15,6 +15,7 @@
 #include "UART_CMDS.h"
 #include "ToF_I2C.h"
 #include "FLASH_SPI.h"
+#include "IMU_SPI.h"
 #include "MESSAGE_QUEUE.h"
 
 #define UART_MAX_ARGS 10
