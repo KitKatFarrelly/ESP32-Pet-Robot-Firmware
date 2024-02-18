@@ -625,11 +625,97 @@ static void uart_imu_cmds(uint8_t argc, char** argv)
     }
     if(strcmp((char*) argv[1], (const char*) "imu_read") == 0)
     {
-        //placeholder
+        if(argc < 4)
+        {
+            ESP_LOGE(TAG, "Incorrect size args");
+            return;
+        }
+
+        uint8_t read_reg = 0;
+        if((uart_get_hex_from_char(argv[2][0]) == UART_INVALID_CHARACTER) || (uart_get_hex_from_char(argv[2][1]) == UART_INVALID_CHARACTER))
+        {
+            ESP_LOGE(TAG, "invalid read register");
+            return;
+        }
+        read_reg = (uart_get_hex_from_char(argv[2][0]) * 16) + (uart_get_hex_from_char(argv[2][1]));
+
+        uint8_t read_bytes = 0;
+        for(uint8_t i = 0; i < strlen(argv[3]); i++)
+        {
+            if(argv[3][i] >= '0' && argv[3][i] <= '9')
+            {
+                read_bytes = read_bytes * 10;
+                read_bytes += (uint8_t) (argv[3][i] - '0');
+            }
+        }
+        uint8_t* read_data = malloc(read_bytes * sizeof(uint8_t));
+        ESP_LOGI(TAG, "Reading %d bytes from register 0x%x", read_bytes, read_reg);
+        IMU_READ(read_data, read_reg, read_bytes);
+        ESP_LOGI(TAG, "Read the following bytes: ");
+        for(uint8_t i = 0; i < read_bytes; i++)
+        {
+            ESP_LOGI(TAG, "%x", read_data[i]);
+        }
+        free(read_data);
     }
     else if(strcmp((char*) argv[1], (const char*) "imu_write") == 0)
     {
-        //placeholder
+        uint8_t write_cnt = 0;
+        uint8_t write_reg = 0;
+        uint8_t write_bytes[UART_MAX_ARGS - 3] = {0};
+        uint8_t i = 0;
+        if(argc < 4)
+        {
+            ESP_LOGE(TAG, "Incorrect size args");
+            return;
+        }
+
+        if(uart_get_hex_from_char(argv[2][0]) == UART_INVALID_CHARACTER)
+        {
+            ESP_LOGE(TAG, "invalid write at byte %u", i);
+            return;
+        }
+
+        write_reg = (uart_get_hex_from_char(argv[2][0]) * 16);
+
+        if(uart_get_hex_from_char(argv[2][1]) == UART_INVALID_CHARACTER)
+        {
+            ESP_LOGE(TAG, "invalid write at byte %u", i);
+            return;
+        }
+
+        write_reg += uart_get_hex_from_char(argv[2][1]);
+
+        for(i = 3; (i < argc) && (i < UART_MAX_ARGS); i++)
+        {
+            if(uart_get_hex_from_char(argv[i][0]) == UART_INVALID_CHARACTER)
+            {
+                ESP_LOGE(TAG, "invalid write at byte %u", i);
+                return;
+            }
+
+            write_bytes[write_cnt] = (uart_get_hex_from_char(argv[i][0]) * 16);
+
+            if(uart_get_hex_from_char(argv[i][1]) == UART_INVALID_CHARACTER)
+            {
+                ESP_LOGE(TAG, "invalid write at byte %u", i);
+                return;
+            }
+
+            write_bytes[write_cnt] += uart_get_hex_from_char(argv[i][1]);
+
+            write_cnt++;
+        }
+        if(i < UART_MAX_ARGS)
+        {
+            write_bytes[write_cnt] = 0;
+        }
+        ESP_LOGI(TAG, "Writing %d bytes to register 0x%x: ", write_cnt, write_reg);
+        for(i = 0; i < write_cnt; i++)
+        {
+            ESP_LOGI(TAG, "%x", write_bytes[i]);
+        }
+        IMU_WRITE(write_bytes, write_reg, write_cnt);
     }
 }
 
