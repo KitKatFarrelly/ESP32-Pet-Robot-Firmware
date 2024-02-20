@@ -165,7 +165,7 @@ void TOF_INIT(void)
 	//gpio_isr_handler_add(TOF_INTR, TOF_MEASUREMENT_INTR_HANDLE, NULL);
 
 	//Try Polling instead
-	s_tof_timer = xTimerCreate("tof_timer", 5 / portTICK_PERIOD_MS, pdTRUE, (void*) 0, TOF_MEASUREMENT_INTR_HANDLE);
+	s_tof_timer = xTimerCreate("tof_timer", 30 / portTICK_PERIOD_MS, pdTRUE, (void*) 0, TOF_MEASUREMENT_INTR_HANDLE);
 }
 
 bool TOF_SET_TMF8828_MODE(bool set_tmf8828)
@@ -862,33 +862,55 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 
 	//Do the actual conversion here
 	ending_iter = s_starting_iter + number_of_measurements;
-	if(ending_iter >= MEASUREMENT_BUF_SIZE)
+	if(ending_iter > MEASUREMENT_BUF_SIZE)
 	{
 		ending_iter -= MEASUREMENT_BUF_SIZE;
 	}
 
 	if(s_is_tmf8828_mode)
 	{
-		s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field = malloc(8 * sizeof(uint16_t*));
-		for(uint8_t pixel_row = 0; pixel_row < 8; pixel_row++)
+		if(s_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size != 8)
 		{
-			s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[pixel_row] = malloc(8 * sizeof(uint16_t));
+			if(s_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size == 4)
+			{
+				for(uint8_t pixel_row = 0; pixel_row < 8; pixel_row++)
+				{
+					free(s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[pixel_row]);
+				}
+				free(s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field);
+			}
+			s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field = malloc(8 * sizeof(uint16_t*));
+			for(uint8_t pixel_row = 0; pixel_row < 8; pixel_row++)
+			{
+				s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[pixel_row] = malloc(8 * sizeof(uint16_t));
+			}
+			s_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size = 8;
+			s_ring_buffer_ptr[s_ring_buffer_iter].vertical_size = 8;
 		}
-		s_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size = 8;
-		s_ring_buffer_ptr[s_ring_buffer_iter].vertical_size = 8;
 	}
 	else
 	{
 		//technically the SPAD map can be 3x3 or 3x6.
 		//assuming the Map is 4x4 right now.
-		
-		s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field = malloc(4 * sizeof(uint16_t*));
-		for(uint8_t pixel_row = 0; pixel_row < 4; pixel_row++)
+
+		if(s_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size != 4)
 		{
-			s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[pixel_row] = malloc(4 * sizeof(uint16_t));
+			if(s_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size == 8)
+			{
+				for(uint8_t pixel_row = 0; pixel_row < 8; pixel_row++)
+				{
+					free(s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[pixel_row]);
+				}
+				free(s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field);
+			}
+			s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field = malloc(4 * sizeof(uint16_t*));
+			for(uint8_t pixel_row = 0; pixel_row < 4; pixel_row++)
+			{
+				s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[pixel_row] = malloc(4 * sizeof(uint16_t));
+			}
+			s_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size = 4;
+			s_ring_buffer_ptr[s_ring_buffer_iter].vertical_size = 4;
 		}
-		s_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size = 4;
-		s_ring_buffer_ptr[s_ring_buffer_iter].vertical_size = 4;
 	}
 
 	for(uint8_t i = s_starting_iter; i != ending_iter; i++)
@@ -915,13 +937,13 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 		//note 2: remember that tmf packets actually send the closest and second closest object in each pixel, should record both.
 		if(s_is_tmf8828_mode)
 		{
-			for(uint8_t j = 0; j < (s_ring_buffer_ptr[s_ring_buffer_iter].vertical_size / 2); j++)
+			for(uint8_t j = 0; j < 4; j++)
 			{
-				for(uint8_t k = 0; k < (s_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size / 4); k++)
+				for(uint8_t k = 0; k < 2; k++)
 				{
 					//tmf8828 mode works upside down
 					uint8_t lin_val = 3 * ((4 * k) + j);
-					uint8_t v_iter = (7 - (j * 2)) - (convert_loop_cnt & 0x02);
+					uint8_t v_iter = (7 - (j * 2)) - ((convert_loop_cnt & 0x02) / 2);
 					uint8_t h_iter = (k * 4) + (2 * (convert_loop_cnt & 0x01));
 					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter] = s_measurement_buffer[i][0x19 + lin_val];
 					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter] += (s_measurement_buffer[i][0x1A + lin_val] << 8);
@@ -932,9 +954,9 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 		}
 		else
 		{
-			for(uint8_t j = 0; j < s_ring_buffer_ptr[s_ring_buffer_iter].vertical_size; j++)
+			for(uint8_t j = 0; j < 4; j++)
 			{
-				for(uint8_t k = 0; k < s_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size; k++)
+				for(uint8_t k = 0; k < 4; k++)
 				{
 					uint8_t lin_val = 3 * ((4 * j) + k);
 					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[j][k] = s_measurement_buffer[i][0x19 + lin_val];
@@ -991,7 +1013,7 @@ static void TOF_MEASUREMENT_INTR_HANDLE(TimerHandle_t xTimer)
 
 	//ESP_LOGI(TAG, "interrupts that need to be cleared are the following: %u.", read_data[0]);
 
-	if(!read_data[0]) return;
+	if(!(read_data[0] & 0x02)) return;
 	
 	// Read out Measurement
 	write_data[0] = 0x20;

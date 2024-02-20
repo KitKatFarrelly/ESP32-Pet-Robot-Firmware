@@ -1010,7 +1010,7 @@ void UART_INIT(void)
                         CDC_EVENT_LINE_STATE_CHANGED,
                         &tinyusb_cdc_line_state_changed_callback));
 
-    ESP_ERROR_CHECK(esp_tusb_init_console(0));
+    ESP_ERROR_CHECK(esp_tusb_init_console(TINYUSB_CDC_ACM_0));
 
 #endif
 
