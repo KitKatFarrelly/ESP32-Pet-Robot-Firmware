@@ -1,4 +1,7 @@
+#include <stdio.h>
 #include <stdint.h>
+#include <string.h>
+#include <fcntl.h>
 
 #ifdef FUNCTIONAL_TESTS
 #include "mocked_functions.h"
@@ -6,9 +9,6 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "tinyusb.h"
-#include "tusb_console.h"
-#include "tusb_cdc_acm.h"
 #include "sdkconfig.h"
 #endif
 
@@ -22,9 +22,6 @@
 #define UART_INVALID_CHARACTER 100
 
 static const char *TAG = "USB_UART";
-#ifndef FUNCTIONAL_TESTS
-static uint8_t buf[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1];
-#endif
 
 // static variables
 static component_handle_t s_uart_component_handle = 0;
@@ -36,14 +33,8 @@ static callback_handle_t s_ToF_callback_handle;
 
 static uint8_t uart_get_hex_from_char(char to_convert);
 static dispatcher_type_t uart_get_dispatcher(char * disp_str);
-static uint8_t uart_convert_str_to_args(const uint8_t * cmd_buf, char** argv_ptr, uint8_t argv_max);
-
-#ifndef FUNCTIONAL_TESTS
-// usb functions
-
-static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event);
-static void tinyusb_cdc_line_state_changed_callback(int itf, cdcacm_event_t *event);
-#endif
+static uint8_t uart_convert_str_to_args(const char * cmd_buf, char** argv_ptr, uint8_t argv_max);
+static void run_command(uint8_t rx_size, char *buf);
 
 // message queue functions
 
@@ -786,11 +777,11 @@ static dispatcher_type_t uart_get_dispatcher(char * disp_str)
 
 // Credit to sstteevvee on StackOverflow for this one
 // https://stackoverflow.com/questions/1706551/parse-string-into-argv-argc
-static uint8_t uart_convert_str_to_args(const uint8_t * cmd_buf, char** argv_ptr, uint8_t argv_max)
+static uint8_t uart_convert_str_to_args(const char * cmd_buf, char** argv_ptr, uint8_t argv_max)
 {
     uint8_t argc = 0;
 
-    char *p2 = strtok((char *)cmd_buf, " ");
+    char *p2 = strtok(cmd_buf, " ");
     while (p2 && argc < argv_max-1)
     {
         argv_ptr[argc++] = p2;
@@ -891,25 +882,36 @@ static bool uart_does_component_have_a_handle(dispatcher_type_t dispatcher)
 
 #ifndef FUNCTIONAL_TESTS
 
-static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event)
+static void poll_stdin(void* args)
+{
+    char buf[128] = {0};
+    char newchar = 0;
+    uint8_t readlen = 0;
+
+    while(true)
+    {
+        newchar = fgetc(stdin);
+        if(newchar >= ' ')
+        {
+            buf[readlen] = newchar;
+            readlen++;
+        }
+        if(readlen > 127 || newchar == '\r' || newchar == '\n')
+        {
+            ESP_LOGI(TAG, "received %s.", buf);
+            run_command(readlen, buf);
+            memset(buf, 0, 128);
+            readlen = 0;
+        }
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+    }
+}
+
+static void run_command(uint8_t rx_size, char *buf)
 {
     /* initialization */
-    size_t rx_size = 0;
     char *argv[UART_MAX_ARGS] = {0};
     uint8_t argc = 0;
-
-    /* read */
-    esp_err_t ret = tinyusb_cdcacm_read(itf, buf, CONFIG_TINYUSB_CDC_RX_BUFSIZE, &rx_size);
-    if (ret == ESP_OK) {
-        buf[rx_size] = '\0';
-        ESP_LOGI(TAG, "Got data (%d bytes): %s", rx_size, buf);
-    } else {
-        ESP_LOGE(TAG, "Read error");
-    }
-
-    // write back
-    tinyusb_cdcacm_write_queue(itf, buf, rx_size);
-    tinyusb_cdcacm_write_flush(itf, 0);
 
     argc = uart_convert_str_to_args(buf, argv, UART_MAX_ARGS);
 
@@ -969,13 +971,6 @@ static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event)
     }
 }
 
-static void tinyusb_cdc_line_state_changed_callback(int itf, cdcacm_event_t *event)
-{
-    int dtr = event->line_state_changed_data.dtr;
-    int rst = event->line_state_changed_data.rts;
-    ESP_LOGI(TAG, "Line state changed! dtr:%d, rst:%d", dtr, rst);
-}
-
 #endif
 
 void UART_INIT(void)
@@ -984,33 +979,10 @@ void UART_INIT(void)
 
 #ifndef FUNCTIONAL_TESTS
 
-    const tinyusb_config_t tusb_cfg = {
-        .device_descriptor = NULL,
-        .string_descriptor = NULL,
-        .external_phy = false,
-        .configuration_descriptor = NULL,
-    };
-
-    ESP_ERROR_CHECK(tinyusb_driver_install(&tusb_cfg));
-
-    tinyusb_config_cdcacm_t acm_cfg = {
-        .usb_dev = TINYUSB_USBDEV_0,
-        .cdc_port = TINYUSB_CDC_ACM_0,
-        .rx_unread_buf_sz = 64,
-        .callback_rx = &tinyusb_cdc_rx_callback, // the first way to register a callback
-        .callback_rx_wanted_char = NULL,
-        .callback_line_state_changed = NULL,
-        .callback_line_coding_changed = NULL
-    };
-
-    ESP_ERROR_CHECK(tusb_cdc_acm_init(&acm_cfg));
-    /* the second way to register a callback */
-    ESP_ERROR_CHECK(tinyusb_cdcacm_register_callback(
-                        TINYUSB_CDC_ACM_0,
-                        CDC_EVENT_LINE_STATE_CHANGED,
-                        &tinyusb_cdc_line_state_changed_callback));
-
-    ESP_ERROR_CHECK(esp_tusb_init_console(TINYUSB_CDC_ACM_0));
+    setvbuf(stdin, NULL, _IONBF, 0);
+    fcntl(fileno(stdout), F_SETFL, 0);
+    fcntl(fileno(stdin), F_SETFL, 0);
+    xTaskCreate(poll_stdin, "poll stdin", 2048, NULL, 0, NULL);
 
 #endif
 
