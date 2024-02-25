@@ -33,7 +33,7 @@ static callback_handle_t s_ToF_callback_handle;
 
 static uint8_t uart_get_hex_from_char(char to_convert);
 static dispatcher_type_t uart_get_dispatcher(char * disp_str);
-static uint8_t uart_convert_str_to_args(const char * cmd_buf, char** argv_ptr, uint8_t argv_max);
+static uint8_t uart_convert_str_to_args(char * cmd_buf, char** argv_ptr, uint8_t argv_max);
 static void run_command(uint8_t rx_size, char *buf);
 
 // message queue functions
@@ -777,7 +777,7 @@ static dispatcher_type_t uart_get_dispatcher(char * disp_str)
 
 // Credit to sstteevvee on StackOverflow for this one
 // https://stackoverflow.com/questions/1706551/parse-string-into-argv-argc
-static uint8_t uart_convert_str_to_args(const char * cmd_buf, char** argv_ptr, uint8_t argv_max)
+static uint8_t uart_convert_str_to_args(char * cmd_buf, char** argv_ptr, uint8_t argv_max)
 {
     uint8_t argc = 0;
 
@@ -891,6 +891,11 @@ static void poll_stdin(void* args)
     while(true)
     {
         newchar = fgetc(stdin);
+        if(newchar == 0x08 || newchar == 0xff)
+        {
+            readlen--;
+            buf[readlen] = '\0';
+        }
         if(newchar >= ' ')
         {
             buf[readlen] = newchar;
@@ -898,7 +903,7 @@ static void poll_stdin(void* args)
         }
         if(readlen > 127 || newchar == '\r' || newchar == '\n')
         {
-            ESP_LOGI(TAG, "received %s.", buf);
+            buf[readlen] = '\0';
             run_command(readlen, buf);
             memset(buf, 0, 128);
             readlen = 0;
@@ -913,6 +918,8 @@ static void run_command(uint8_t rx_size, char *buf)
     char *argv[UART_MAX_ARGS] = {0};
     uint8_t argc = 0;
 
+    ESP_LOGI(TAG, "Got data (%d bytes): %s", rx_size, buf);
+    
     argc = uart_convert_str_to_args(buf, argv, UART_MAX_ARGS);
 
     if(argc == 0)
@@ -982,7 +989,7 @@ void UART_INIT(void)
     setvbuf(stdin, NULL, _IONBF, 0);
     fcntl(fileno(stdout), F_SETFL, 0);
     fcntl(fileno(stdin), F_SETFL, 0);
-    xTaskCreate(poll_stdin, "poll stdin", 2048, NULL, 0, NULL);
+    xTaskCreate(poll_stdin, "poll_stdin", 16384, NULL, 0, NULL);
 
 #endif
 
