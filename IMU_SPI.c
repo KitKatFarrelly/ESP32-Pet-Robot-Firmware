@@ -31,7 +31,7 @@
 #define IMU_DAT_SIZE 0x0F
 #define POSITION_BUF_SIZE 8
 
-static const char *TAG = "SPI LOG";
+static const char *TAG = "SPI_LOG";
 
 // static variables
 static spi_device_handle_t s_spi_handle = NULL;
@@ -59,6 +59,7 @@ void IMU_READ(uint8_t* IMU_OUT, uint8_t IMU_REG, uint8_t out_size)
 	t.base.flags = SPI_TRANS_USE_RXDATA | SPI_TRANS_VARIABLE_DUMMY;
 	t.base.cmd = (0x80 | IMU_REG);
     ret=spi_device_polling_transmit(s_spi_handle, (spi_transaction_t*)&t);  //Transmit!
+	ESP_LOGI(TAG, "error type is %x.", ret);
     assert(ret==ESP_OK);            //Should have had no issues.
     for(uint8_t i = 0; i < out_size; i++)
 	{
@@ -80,6 +81,7 @@ void IMU_WRITE(uint8_t* IMU_IN, uint8_t IMU_REG, uint8_t in_size)
 	t.flags = SPI_TRANS_USE_TXDATA;
 	t.cmd = IMU_REG;
     ret=spi_device_polling_transmit(s_spi_handle, &t);  //Transmit!
+	ESP_LOGI(TAG, "error type is %x.", ret);
     assert(ret==ESP_OK);            //Should have had no issues.
 }
 
@@ -114,10 +116,13 @@ void IMU_INIT(void)
 	};
 	spi_device_interface_config_t devcfg={
 		.command_bits = 8,						//8 CMD bits
+		.address_bits = 0,						//0 ADDR bits
 		.clock_speed_hz=4*1000*1000,			//Clock out at 4 MHz
 		.mode=0,                                //SPI mode 0
 		.spics_io_num=PIN_NUM_CS,               //CS pin
 		.queue_size=7,                          //We want to be able to queue 7 transactions at a time
+		.pre_cb = NULL,
+		.flags = SPI_DEVICE_HALFDUPLEX,
 	};
 	//Initialize the SPI bus
 	ret=spi_bus_initialize(SPI3_HOST, &buscfg, DMA_CHAN);
