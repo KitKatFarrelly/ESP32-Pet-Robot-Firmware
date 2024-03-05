@@ -31,6 +31,16 @@
 #define IMU_DAT_SIZE 0x0F
 #define POSITION_BUF_SIZE 8
 
+// Important Addresses
+#define BMI2_ACC_X_LSB_ADDR                           (0x0C)
+#define BMI2_GYR_X_LSB_ADDR                           (0x12)
+#define BMI2_SENSORTIME_ADDR                          (0x18)
+#define BMI2_INIT_CTRL_ADDR                           (0x59)
+#define BMI2_INIT_ADDR_0                              (0x5B)
+#define BMI2_INIT_ADDR_1                              (0x5C)
+#define BMI2_INIT_DATA_ADDR                           (0x5E)
+#define BMI2_PWR_CONF_ADDR                            (0x7C)
+
 static const char *TAG = "SPI_LOG";
 
 // static variables
@@ -61,11 +71,25 @@ void IMU_READ(uint8_t* IMU_OUT, uint8_t IMU_REG, uint8_t out_size)
     ret=spi_device_polling_transmit(s_spi_handle, (spi_transaction_t*)&t);  //Transmit!
 	ESP_LOGI(TAG, "error type is %x.", ret);
     assert(ret==ESP_OK);            //Should have had no issues.
-    for(uint8_t i = 0; i < out_size; i++)
+    for(uint8_t i = 0; i < out_size && i < 4; i++)
 	{
-		ESP_LOGI(TAG, "SPI data %u is %x", i, t.base.rx_data[i]);
 		IMU_OUT[i] = t.base.rx_data[i];
 	}
+}
+
+void IMU_READ_LONG(uint8_t* IMU_OUT, uint8_t IMU_REG, uint8_t out_size)
+{
+	esp_err_t ret;
+    spi_transaction_t t;
+    memset(&t, 0, sizeof(t));       //Zero out the transaction
+	t.base.rx_buffer = IMU_OUT;
+	t.base.rxlength = out_size * 8;
+	t.dummy_bits = 8;
+	t.base.flags = SPI_TRANS_USE_RXDATA | SPI_TRANS_VARIABLE_DUMMY;
+	t.base.cmd = (0x80 | IMU_REG);
+    ret=spi_device_polling_transmit(s_spi_handle, (spi_transaction_t*)&t);  //Transmit!
+	ESP_LOGI(TAG, "error type is %x.", ret);
+    assert(ret==ESP_OK);            //Should have had no issues.
 }
 
 void IMU_WRITE(uint8_t* IMU_IN, uint8_t IMU_REG, uint8_t in_size)
@@ -94,6 +118,7 @@ void IMU_WRITE_LONG(uint8_t* IMU_IN, uint8_t IMU_REG, uint8_t in_size)
 	t.length = 8 * in_size;
 	t.cmd = IMU_REG;
     ret=spi_device_polling_transmit(s_spi_handle, &t);  //Transmit!
+	ESP_LOGI(TAG, "error type is %x.", ret);
     assert(ret==ESP_OK);            //Should have had no issues.
 }
 
