@@ -30,6 +30,7 @@
 #define IMU_BUF_SIZE 20
 #define IMU_DAT_SIZE 0x0F
 #define POSITION_BUF_SIZE 8
+#define BURST_BYTE_NUMBER 64
 
 // Important Addresses
 #define BMI2_ACC_X_LSB_ADDR                           (0x0C)
@@ -206,7 +207,41 @@ uint8_t imu_set_features(uint8_t feature_flags)
 
 static void imu_configuration_init(void)
 {
-	//placeholder
+	uint8_t write_data[2] = {0, 0};
+	uint16_t config_index = 0;
+	uint16_t burst_len = BURST_BYTE_NUMBER;
+	uint16_t config_length = sizeof(bmi270_config_file);
+	// Steps:
+
+	// 1. Disable Advanced Power Features
+	IMU_WRITE(write_data, BMI2_PWR_CONF_ADDR, 1);
+	// 2. Disable Loading Config
+	IMU_WRITE(write_data, BMI2_PWR_CONF_ADDR, 1);
+	ESP_LOGI(TAG, "starting config write, config length is 0x%x", config_length);
+	while(config_index < config_length)
+	{
+		if(config_index + burst_len > config_length)
+		{
+			burst_len = config_length - config_index;
+		}
+		ESP_LOGI(TAG, "index is 0x%x, write length is 0x%x", config_index, burst_len);
+		// 3. Set initial write address to 0
+		write_data[0] = (uint8_t)((config_index / 2) & 0x0F);
+		write_data[1] = (uint8_t)((config_index / 2) >> 4);
+		// 4. Load address into BMI2_INIT_ADDR_0 (lowest 4 bits) and BMI2_INIT_ADDR_1 (upper 8 bits)
+		IMU_WRITE(write_data, BMI2_INIT_ADDR_0, 2);
+		// 5. write burst of config bytes into BMI2_INIT_DATA_ADDR
+		IMU_WRITE_LONG(bmi270_config_file + config_index, BMI2_INIT_DATA_ADDR, burst_len)
+		// 6. Increment write address by burst length / 2
+		if()
+		config_index += burst_len;
+		// 7. Repeat 3-7 until end of file
+	}
+	// 8. Enable Loading Config
+	write_data[0] = 1;
+	write_data[1] = 0;
+	IMU_WRITE(write_data, BMI2_PWR_CONF_ADDR, 1);
+	ESP_LOGI(TAG, "init successful");
 }
 
 uint8_t imu_start(void)
