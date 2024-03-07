@@ -12,6 +12,8 @@
 #endif
 
 #include "IMU_SPI.h"
+#include "spi_config_data.h"
+#include "MESSAGE_QUEUE.h"
 
 // SPI definitions - TODO: 
 #define PIN_NUM_MISO GPIO_NUM_37
@@ -36,11 +38,16 @@
 #define BMI2_ACC_X_LSB_ADDR                           (0x0C)
 #define BMI2_GYR_X_LSB_ADDR                           (0x12)
 #define BMI2_SENSORTIME_ADDR                          (0x18)
+#define BMI2_INT_STATUS_1_ADDR                        (0x1D) // 0x40 is gyro data ready, 0x80 is acc data ready
+#define BMI2_ACC_CONF_ADDR                            (0x40)
+#define BMI2_GYR_CONF_ADDR                            (0x42)
+#define BMI2_INT_MAP_DATA_ADDR                        (0x58)
 #define BMI2_INIT_CTRL_ADDR                           (0x59)
 #define BMI2_INIT_ADDR_0                              (0x5B)
 #define BMI2_INIT_ADDR_1                              (0x5C)
 #define BMI2_INIT_DATA_ADDR                           (0x5E)
 #define BMI2_PWR_CONF_ADDR                            (0x7C)
+#define BMI2_PWR_CTRL_ADDR                            (0x7D)
 
 static const char *TAG = "SPI_LOG";
 
@@ -51,9 +58,8 @@ static component_handle_t s_imu_private_handle = 0;
 
 // static functions
 static void imu_configuration_init(void);
-static uint8_t imu_write_config_chunk(uint16_t index);
-static void imu_check_interrupts(void);
-static uint8_t imu_read_accel_gyro_dat(bool read_accel, bool read_gyro);
+static void imu_check_interrupt_data(void *arg);
+static void imu_check_interrupt_err(void *arg);
 
 // Externs
 component_handle_t imu_public_component = 0;
@@ -130,6 +136,34 @@ void IMU_INIT(void)
 	//SPI SETUP
 
 #ifndef FUNCTIONAL_TESTS
+
+	//SPI INTERRUPTS
+
+	//zero-initialize the config structure.
+    gpio_config_t io_conf = {};
+	//interrupt of rising edge
+    io_conf.intr_type = GPIO_INTR_NEGEDGE;
+    //bit mask of the battery stat
+    io_conf.pin_bit_mask = (1ULL<<IMU_INT1);
+    //set as input mode
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    //enable pull-up mode
+    io_conf.pull_up_en = 0;
+    gpio_config(&io_conf);
+
+	//interrupt of rising edge
+    io_conf.intr_type = GPIO_INTR_NEGEDGE;
+    //bit mask of the battery stat
+    io_conf.pin_bit_mask = (1ULL<<IMU_INT2);
+    //set as input mode
+    io_conf.mode = GPIO_MODE_INPUT;
+    //enable pull-up mode
+    io_conf.pull_up_en = 1;
+    gpio_config(&io_conf);
+
+	//SPI INTERRUPT HANDLERS
+	gpio_isr_handler_add(IMU_INT1, imu_check_interrupt_data, NULL);
+	gpio_isr_handler_add(IMU_INT2, imu_check_interrupt_err, NULL);
 	
 	esp_err_t ret;
 	spi_bus_config_t buscfg={
@@ -225,15 +259,14 @@ static void imu_configuration_init(void)
 			burst_len = config_length - config_index;
 		}
 		ESP_LOGI(TAG, "index is 0x%x, write length is 0x%x", config_index, burst_len);
-		// 3. Set initial write address to 0
+		// 3. Set write address to config index / 2
 		write_data[0] = (uint8_t)((config_index / 2) & 0x0F);
 		write_data[1] = (uint8_t)((config_index / 2) >> 4);
 		// 4. Load address into BMI2_INIT_ADDR_0 (lowest 4 bits) and BMI2_INIT_ADDR_1 (upper 8 bits)
 		IMU_WRITE(write_data, BMI2_INIT_ADDR_0, 2);
 		// 5. write burst of config bytes into BMI2_INIT_DATA_ADDR
 		IMU_WRITE_LONG(bmi270_config_file + config_index, BMI2_INIT_DATA_ADDR, burst_len)
-		// 6. Increment write address by burst length / 2
-		if()
+		// 6. Increment config index by burst length
 		config_index += burst_len;
 		// 7. Repeat 3-7 until end of file
 	}
@@ -247,6 +280,27 @@ static void imu_configuration_init(void)
 uint8_t imu_start(void)
 {
 	//start reading data from imu
+	uint8_t write_data = 0;
+	uint16_t config_index = 0;
+	uint16_t burst_len = BURST_BYTE_NUMBER;
+	uint16_t config_length = sizeof(bmi270_config_file);
+	// Steps:
+
+	// 1. Enable accelerometer, gyro data, disable aux
+	write_data = 0x0E;
+	IMU_WRITE(&write_data, BMI2_PWR_CTRL_ADDR, 1);
+	// 2. Accelerometer config
+	write_data = 0xA8;
+	IMU_WRITE(&write_data, BMI2_ACC_CONF_ADDR, 1);
+	// 3. Gyro config
+	write_data = 0xA9;
+	IMU_WRITE(&write_data, BMI2_GYRO_CONF_ADDR, 1);
+	// 4. Disable adv power saving, enable fifo_self_wakeup
+	write_data = 0x02;
+	IMU_WRITE(&write_data, BMI2_PWR_CONF_ADDR, 1);
+	// 5. Enable reading from interrupt - error from int2, data from int1
+	write_data = 0x84;
+	IMU_WRITE(&write_data, BMI2_INT_MAP_DATA_ADDR, 1);
 	return 0;
 }
 
@@ -256,13 +310,36 @@ uint8_t imu_stop(void)
 	return 0;
 }
 
-static uint8_t imu_write_config_chunk(uint16_t index)
-{
-	//Write config chunk to IMU based on config file
-	return 0;
-}
-
-static void imu_check_interrupts(void)
+static void imu_check_interrupt_data(void *arg)
 {
 	//Read interrupt values and if data is available read imu data
+	uint8_t read_data = 0x00;
+	uint8_t *read_timestamp;
+	uint8_t *read_data;
+	
+	// 1. Read which data is ready
+	IMU_READ(&read_data, BMI2_INT_STATUS_1_ADDR, 1);
+	if(read_data & 0x84)
+	{
+		read_timestamp = (uint8_t *)malloc(3 * sizeof(uint8_t));
+		IMU_READ(read_timestamp, BMI2_SENSORTIME_ADDR, 3);
+	}
+
+	// 2. send accel data to message queue if ready
+	if(read_data & 0x80)
+	{
+		read_data = (uint8_t *)malloc(6 * sizeof(uint8_t));
+		IMU_READ_LONG(read_data, BMI2_ACC_X_LSB_ADDR, 6);
+	}
+	// 3. send gyro data to message queue if ready
+	if(read_data & 0x40)
+	{
+		read_data = (uint8_t *)malloc(6 * sizeof(uint8_t));
+		IMU_READ_LONG(read_data, BMI2_GYR_X_LSB_ADDR, 6);
+	}
+}
+
+static void imu_check_interrupt_err(void *arg)
+{
+	//Check error
 }
