@@ -375,7 +375,7 @@ static void imu_handle_data(component_handle_t comp_handle, uint8_t internal_msg
 		ESP_LOGE(TAG, "Invalid comp handle %u.", comp_handle);
 		return;
 	}
-	switch((TOF_MESSAGE_TYPES_t) internal_msg_type)
+	switch((IMU_MESSAGE_TYPES_t) internal_msg_type)
 	{
 		case IMU_MSG_INTERNAL_RAW_DATA:
 			imu_convert_buffer_to_orientation((IMU_DATA_RAW_t) data);
@@ -388,9 +388,9 @@ static void imu_handle_data(component_handle_t comp_handle, uint8_t internal_msg
 			placeholder_dat.message_type = IMU_MSG_INTERNAL_RAW_DATA;
 			send_message_to_normal_queue(placeholder_dat);
 			break;
-		case TOF_MSG_MAX:
+		case IMU_MSG_MAX:
 		default:
-			ESP_LOGE(TAG, "Invalid tof message type %u.", internal_msg_type);
+			ESP_LOGE(TAG, "Invalid imu message type %u.", internal_msg_type);
 			break;
 	}
 }
