@@ -549,6 +549,7 @@ static void uart_msg_queue_cmds(uint8_t argc, char** argv)
             message_info_t message;
             message.component_handle = s_uart_component_handle;
             message.message_type = 0;
+            message.is_pointer = false;
             char* uart_msg = malloc(sizeof(char) * (strlen(argv[3]) + 1));
             memcpy(uart_msg, argv[3], sizeof(char) * strlen(argv[3]));
             uart_msg[strlen(argv[3])] = '\0';
@@ -796,18 +797,10 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
 {
     dispatcher_type_t dispatcher = uart_get_dispatcher_from_component(component_type);
     ESP_LOGI(TAG, "message from %s with message type %u and size %u.", uart_return_string_from_dispatcher(dispatcher), message_type, message_size);
-    if(message_size > 200)
-    {
-        ESP_LOGE(TAG, "message size too large:");
-        return;
-    }
-    ESP_LOGI(TAG, "message data:");
-    char* output_data = (char*) message_data;
-    ESP_LOGI(TAG, "%s", output_data);
     if(component_type == ToF_public_component && message_type == TOF_MSG_NEW_DEPTH_ARRAY)
     {
         //write TOF_DATA_t to console
-        TOF_DATA_t* tof_data = *(TOF_DATA_t**) message_data;
+        TOF_DATA_t* tof_data = (TOF_DATA_t*) message_data;
         uint8_t h_size = tof_data->horizontal_size;
         uint8_t v_size = tof_data->vertical_size;
         uint16_t** array_ptr = tof_data->depth_pixel_field;
@@ -819,16 +812,38 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
                 ESP_LOGI(TAG, "%04u %04u %04u %04u %04u %04u %04u %04u", 
                         array_ptr[j][0], array_ptr[j][1], array_ptr[j][2], array_ptr[j][3],
                         array_ptr[j][4], array_ptr[j][5], array_ptr[j][6], array_ptr[j][7]);
-                vTaskDelay(5 / portTICK_PERIOD_MS);
             }
             else if(h_size == 4)
             {
                 ESP_LOGI(TAG, "%04u %04u %04u %04u", 
                         array_ptr[j][0], array_ptr[j][1], array_ptr[j][2], array_ptr[j][3]);
-                vTaskDelay(5 / portTICK_PERIOD_MS);
             }
             
         }
+    }
+    else if (component_type == imu_public_component && message_type == IMU_MSG_INTERNAL_RAW_DATA)
+    {
+        // need to change this to read orientation once I make algo for that
+        uint32_t timestamp = (message_data.timestamp[2] << 16) + (message_data.timestamp[1] << 8) + message_data.timestamp[0];
+        ESP_LOGI(TAG, "timestamp %lu imu data:", timestamp);
+        for(uint8_t i = 0; i < 3; i++)
+        {
+            uint16_t raw_accel = (imu_data.acc_data[2i + 1] << 8) + imu_data.acc_data[2i];
+            uint16_t raw_gyro = (imu_data.gyr_data[2i + 1] << 8) + imu_data.gyr_data[2i];
+            ESP_LOGI(TAG, "%u: accel %04u, gyro %04u", raw_accel, raw_gyro);
+        }
+    }
+    
+    else
+    {
+        if(message_size > 200)
+        {
+            ESP_LOGE(TAG, "message size too large:");
+            return;
+        }
+        ESP_LOGI(TAG, "message data:");
+        char* output_data = (char*) message_data;
+        ESP_LOGI(TAG, "%s", output_data);
     }
 }
 

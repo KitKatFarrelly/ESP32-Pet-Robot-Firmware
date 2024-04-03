@@ -30,7 +30,6 @@
 
 #define FW_HEADER_LEN 4
 #define IMU_BUF_SIZE 20
-#define IMU_DAT_SIZE 0x0F
 #define POSITION_BUF_SIZE 8
 #define BURST_BYTE_NUMBER 64
 
@@ -53,13 +52,16 @@ static const char *TAG = "SPI_LOG";
 
 // static variables
 static spi_device_handle_t s_spi_handle = NULL;
-static uint8_t s_imu_data_buffer[IMU_BUF_SIZE][IMU_DAT_SIZE] = {0};
 static component_handle_t s_imu_private_handle = 0;
+static IMU_DATA_RAW_t s_imu_measurement_buffer[IMU_BUF_SIZE] = {0};
+static uint8_t s_imu_buf_iter = 0;
 
 // static functions
 static void imu_configuration_init(void);
 static void imu_check_interrupt_data(void *arg);
 static void imu_check_interrupt_err(void *arg);
+static void imu_handle_data(component_handle_t comp_handle, uint8_t internal_msg_type, void* data, size_t data_len);
+static void imu_convert_buffer_to_orientation(IMU_DATA_RAW_t raw_dat);
 
 // Externs
 component_handle_t imu_public_component = 0;
@@ -193,6 +195,13 @@ void IMU_INIT(void)
 
 #endif
 
+	if(check_is_queue_active(1))
+	{
+		create_handle_for_component(&s_imu_private_handle);
+		create_handle_for_component(&imu_public_component);
+		register_priority_handler_for_messages(imu_handle_data, s_imu_private_handle);
+	}
+
 	// Step 1: Run self test
 
 	// Step 2: If successful, write config file
@@ -315,31 +324,78 @@ static void imu_check_interrupt_data(void *arg)
 	//Read interrupt values and if data is available read imu data
 	uint8_t read_data = 0x00;
 	uint8_t *read_timestamp;
-	uint8_t *read_data;
+	uint8_t *read_acc;
+	uint8_t *read_gyr;
 	
 	// 1. Read which data is ready
 	IMU_READ(&read_data, BMI2_INT_STATUS_1_ADDR, 1);
 	if(read_data & 0x84)
 	{
-		read_timestamp = (uint8_t *)malloc(3 * sizeof(uint8_t));
-		IMU_READ(read_timestamp, BMI2_SENSORTIME_ADDR, 3);
+		IMU_READ(s_imu_measurement_buffer[s_imu_buf_iter].timestamp, BMI2_SENSORTIME_ADDR, 3);
 	}
 
-	// 2. send accel data to message queue if ready
+	// 2. read accel data if available
 	if(read_data & 0x80)
 	{
-		read_data = (uint8_t *)malloc(6 * sizeof(uint8_t));
-		IMU_READ_LONG(read_data, BMI2_ACC_X_LSB_ADDR, 6);
+		IMU_READ_LONG(s_imu_measurement_buffer[s_imu_buf_iter].acc_data, BMI2_ACC_X_LSB_ADDR, 6);
 	}
-	// 3. send gyro data to message queue if ready
+	// 3. read gyro data if available
 	if(read_data & 0x40)
 	{
-		read_data = (uint8_t *)malloc(6 * sizeof(uint8_t));
-		IMU_READ_LONG(read_data, BMI2_GYR_X_LSB_ADDR, 6);
+		IMU_READ_LONG(s_imu_measurement_buffer[s_imu_buf_iter].gyr_data, BMI2_GYR_X_LSB_ADDR, 6);
+	}
+	// 4. send raw imu data to message queue
+	if(check_is_queue_active(1))
+	{
+		message_info_t convert_spi_msg;
+		convert_spi_msg.message_data = (void*) &s_imu_measurement_buffer[s_imu_buf_iter];
+		convert_spi_msg.message_size = sizeof(IMU_DATA_RAW_t);
+		convert_spi_msg.is_pointer = false;
+		convert_spi_msg.component_handle = s_imu_private_handle;
+		convert_spi_msg.message_type = IMU_MSG_INTERNAL_RAW_DATA;
+		send_message_to_priority_queue(convert_spi_msg);
+	}
+
+	s_imu_buf_iter++;
+	if(s_imu_buf_iter >= IMU_BUF_SIZE)
+	{
+		s_imu_buf_iter = 0;
 	}
 }
 
 static void imu_check_interrupt_err(void *arg)
 {
 	//Check error
+}
+
+static void imu_handle_data(component_handle_t comp_handle, uint8_t internal_msg_type, void* data, size_t data_len)
+{
+	if(comp_handle != s_imu_private_handle)
+	{
+		ESP_LOGE(TAG, "Invalid comp handle %u.", comp_handle);
+		return;
+	}
+	switch((TOF_MESSAGE_TYPES_t) internal_msg_type)
+	{
+		case IMU_MSG_INTERNAL_RAW_DATA:
+			imu_convert_buffer_to_orientation((IMU_DATA_RAW_t) data);
+			//placeholder - sends raw data up
+			message_info_t placeholder_dat;
+			placeholder_dat.message_data = data;
+			placeholder_dat.message_size = sizeof(IMU_DATA_RAW_t);
+			placeholder_dat.is_pointer = false;
+			placeholder_dat.component_handle = imu_public_component;
+			placeholder_dat.message_type = IMU_MSG_INTERNAL_RAW_DATA;
+			send_message_to_normal_queue(placeholder_dat);
+			break;
+		case TOF_MSG_MAX:
+		default:
+			ESP_LOGE(TAG, "Invalid tof message type %u.", internal_msg_type);
+			break;
+	}
+}
+
+static void imu_convert_buffer_to_orientation(IMU_DATA_RAW_t raw_dat)
+{
+	//convert raw data into a 3D orientation
 }

@@ -5,6 +5,22 @@
 
 extern component_handle_t imu_public_component;
 
+typedef struct
+{
+    float x_rads;
+    float y_rads;
+    float z_rads;
+    uint32_t timestamp;
+} imu_orientation_t;
+
+// make this private in the future
+typedef struct
+{
+    uint8_t acc_data[6];
+    uint8_t gyr_data[6];
+    uint8_t timestamp[3];
+} IMU_DATA_RAW_t;
+
 typedef enum
 {
     IMU_MSG_INTERNAL_RAW_DATA,

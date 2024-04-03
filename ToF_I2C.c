@@ -979,9 +979,9 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 
 	s_ring_buffer_ptr[s_ring_buffer_iter].is_populated = true;
 	message_info_t depth_array_msg;
-	depth_array_msg.message_data = malloc(sizeof(TOF_DATA_t**));
-	*((TOF_DATA_t**) depth_array_msg.message_data) = &(s_ring_buffer_ptr[s_ring_buffer_iter]);
-	depth_array_msg.message_size = sizeof(TOF_DATA_t*);
+	depth_array_msg.message_data = (void*) &(s_ring_buffer_ptr[s_ring_buffer_iter]);
+	depth_array_msg.message_size = sizeof(TOF_DATA_t);
+	depth_array_msg.is_pointer = false;
 	depth_array_msg.component_handle = ToF_public_component;
 	depth_array_msg.message_type = TOF_MSG_NEW_DEPTH_ARRAY;
 	send_message_to_priority_queue(depth_array_msg);
@@ -1035,6 +1035,7 @@ static void TOF_MEASUREMENT_INTR_HANDLE(TimerHandle_t xTimer)
 		message_info_t convert_i2c_msg;
 		convert_i2c_msg.message_data=NULL;
 		convert_i2c_msg.message_size=0;
+		convert_i2c_msg.is_pointer=false;
 		convert_i2c_msg.component_handle=s_internal_comp_handle;
 		convert_i2c_msg.message_type=TOF_MSG_INTERNAL_CONVERT_I2C;
 		send_message_to_priority_queue(convert_i2c_msg);

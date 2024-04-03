@@ -11,6 +11,7 @@ typedef struct
 {
     void* message_data;
     size_t message_size;
+    bool is_pointer;
     component_handle_t component_handle;
     uint8_t message_type; //message_type should be casted from an enum
 } message_info_t;

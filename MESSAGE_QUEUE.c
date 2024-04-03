@@ -342,7 +342,7 @@ static void normal_queue_loop(void* args)
                 (*(callback_iter->callback_ptr))(message_info.component_handle, message_info.message_type, message_info.message_data, message_info.message_size);
                 callback_iter = callback_iter->next_handler;
             }
-            if(message_info.message_data != NULL)
+            if(message_info.is_pointer)
             {
                 free(message_info.message_data);
             }
@@ -376,7 +376,7 @@ static void priority_queue_loop(void* args)
                 (*(callback_iter->callback_ptr))(message_info.component_handle, message_info.message_type, message_info.message_data, message_info.message_size);
                 callback_iter = callback_iter->next_handler;
             }
-            if(message_info.message_data != NULL)
+            if(message_info.is_pointer)
             {
                 free(message_info.message_data);
             }
