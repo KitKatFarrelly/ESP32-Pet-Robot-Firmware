@@ -821,9 +821,8 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
             
         }
     }
-    else if (component_type == imu_public_component && message_type == IMU_MSG_INTERNAL_RAW_DATA)
+    else if (component_type == imu_public_component && message_type == IMU_MSG_RAW_DATA)
     {
-        // need to change this to read orientation once I make algo for that
         uint32_t timestamp = (message_data.timestamp[2] << 16) + (message_data.timestamp[1] << 8) + message_data.timestamp[0];
         ESP_LOGI(TAG, "timestamp %lu imu data:", timestamp);
         for(uint8_t i = 0; i < 3; i++)
