@@ -116,11 +116,11 @@ void TOF_INIT(void)
 
 	//zero-initialize the config structure.
     gpio_config_t io_conf = {};
-	//interrupt of rising edge
+	//no interrupt
     io_conf.intr_type = GPIO_INTR_DISABLE;
     //bit mask of the battery stat
     io_conf.pin_bit_mask = (1ULL<<TOF_EN);
-    //set as input mode
+    //set as output mode
     io_conf.mode = GPIO_MODE_OUTPUT;
     //enable pull-up mode
     io_conf.pull_up_en = 0;
@@ -128,7 +128,7 @@ void TOF_INIT(void)
 
 	//TOF INTERRUPT
 
-	//interrupt of rising edge
+	//interrupt of falling edge
     io_conf.intr_type = GPIO_INTR_NEGEDGE;
     //bit mask of the battery stat
     io_conf.pin_bit_mask = (1ULL<<TOF_INTR);

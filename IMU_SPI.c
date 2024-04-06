@@ -34,12 +34,24 @@
 #define BURST_BYTE_NUMBER 64
 
 // Important Addresses
+#define BMI2_ERROR_REGISTER                           (0x02)
+#define BMI2_STATUS_REGISTER                          (0x03)
 #define BMI2_ACC_X_LSB_ADDR                           (0x0C)
 #define BMI2_GYR_X_LSB_ADDR                           (0x12)
 #define BMI2_SENSORTIME_ADDR                          (0x18)
+#define BMI2_EVENTS_ADDR                              (0x1B)
 #define BMI2_INT_STATUS_1_ADDR                        (0x1D) // 0x40 is gyro data ready, 0x80 is acc data ready
+#define BMI2_INTERNAL_STATUS                          (0x21)
 #define BMI2_ACC_CONF_ADDR                            (0x40)
+#define BMI2_ACC_RANGE_ADDR                           (0x41)
 #define BMI2_GYR_CONF_ADDR                            (0x42)
+#define BMI2_GYR_RANGE_ADDR                           (0x43)
+#define BMI2_ERROR_REG_MAP                            (0x52)
+#define BMI2_INT1_IO_CTRL                             (0x53)
+#define BMI2_INT2_IO_CTRL                             (0x54)
+#define BMI2_INT_LATCH                                (0x55)
+#define BMI2_INT1_FEATURES                            (0x56)
+#define BMI2_INT2_FEATURES                            (0x57)
 #define BMI2_INT_MAP_DATA_ADDR                        (0x58)
 #define BMI2_INIT_CTRL_ADDR                           (0x59)
 #define BMI2_INIT_ADDR_0                              (0x5B)
@@ -47,6 +59,7 @@
 #define BMI2_INIT_DATA_ADDR                           (0x5E)
 #define BMI2_PWR_CONF_ADDR                            (0x7C)
 #define BMI2_PWR_CTRL_ADDR                            (0x7D)
+#define BMI2_COMMAND_ADDR                             (0x7E)
 
 static const char *TAG = "SPI_LOG";
 
@@ -140,24 +153,24 @@ void IMU_INIT(void)
 
 	//zero-initialize the config structure.
     gpio_config_t io_conf = {};
-	//interrupt of rising edge
+	//interrupt of falling edge
     io_conf.intr_type = GPIO_INTR_NEGEDGE;
     //bit mask of the battery stat
     io_conf.pin_bit_mask = (1ULL<<IMU_INT1);
     //set as input mode
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    //enable pull-up mode
+    io_conf.mode = GPIO_MODE_INPUT;
+    //disable pull-up mode
     io_conf.pull_up_en = 0;
     gpio_config(&io_conf);
 
-	//interrupt of rising edge
+	//interrupt of falling edge
     io_conf.intr_type = GPIO_INTR_NEGEDGE;
     //bit mask of the battery stat
     io_conf.pin_bit_mask = (1ULL<<IMU_INT2);
     //set as input mode
     io_conf.mode = GPIO_MODE_INPUT;
-    //enable pull-up mode
-    io_conf.pull_up_en = 1;
+    //disable pull-up mode
+    io_conf.pull_up_en = 0;
     gpio_config(&io_conf);
 
 	//SPI INTERRUPT HANDLERS
@@ -203,37 +216,80 @@ void IMU_INIT(void)
 	imu_configuration_init();
 }
 
-void imu_enable_accel(bool enable)
+uint8_t imu_accel_config(void)
 {
-	//enable/disable acclerometer on sensor
+	//configure acclerometer on sensor
+	// 1. Accelerometer config 100Hz Normal Mode
+	write_data = 0xA8;
+	IMU_WRITE(&write_data, BMI2_ACC_CONF_ADDR, 1);
+	// 2. 4G max range
+	write_data = 0x01;
+	IMU_WRITE(&write_data, BMI2_ACC_RANGE_ADDR, 1);
+	return 0;
 }
 
-void imu_enable_gyro(bool enable)
+uint8_t imu_gyro_config(void)
 {
-	//enable/disable gyro on sensor
+	//configure gyro on sensor
+	// 1. Gyro config 200Hz Normal Mode
+	write_data = 0xE9;
+	IMU_WRITE(&write_data, BMI2_GYRO_CONF_ADDR, 1);
+	// 2. 2000dps pre and post filter
+	write_data = 0x08;
+	IMU_WRITE(&write_data, BMI2_ACC_RANGE_ADDR, 1);
+	return 0;
 }
 
 uint8_t imu_reset(void)
 {
 	//soft reset
+	uint8_t write_data = 0xB6;
+	IMU_WRITE(&write_data, BMI2_COMMAND_ADDR, 1);
 	return 0;
 }
 
 uint8_t imu_check_status(void)
 {
 	//checks status register of imu
-	return 0;
+	uint8_t read_data = 0x00;
+	IMU_READ(&read_data, BMI2_STATUS_REGISTER, 1);
+	return read_data;
 }
 
 uint8_t imu_check_error(void)
 {
 	//checks error register of imu
-	return 0;
+	uint8_t read_data = 0x00;
+	IMU_READ(&read_data, BMI2_ERROR_REGISTER, 1);
+	return read_data;
 }
 
-uint8_t imu_set_latched_mode(bool enable)
+uint8_t imu_check_events(void)
 {
-	//sets latched mode for imu
+	//checks events register of imu
+	uint8_t read_data = 0x00;
+	IMU_READ(&read_data, BMI2_EVENTS_ADDR, 1);
+	return read_data;
+}
+
+uint8_t imu_set_interrupts(void)
+{
+	//configure interrupts
+	// 1. Error Registration - fatal and internal errors
+	write_data = 0x1F;
+	IMU_WRITE(&write_data, BMI2_ERROR_REG_MAP, 1);
+	// 2. INT1 IO - falling edge, push/pull, output enabled
+	write_data = 0x04;
+	IMU_WRITE(&write_data, BMI2_INT1_IO_CTRL, 1);
+	// 3. INT2 IO - falling edge, push/pull, output enabled
+	write_data = 0x04;
+	IMU_WRITE(&write_data, BMI2_INT2_IO_CTRL, 1);
+	// 4. Latching turned off
+	write_data = 0x00;
+	IMU_WRITE(&write_data, BMI2_INT_LATCH, 1);
+	// 5. Enable reading from interrupt - error from int2, data from int1
+	write_data = 0x84;
+	IMU_WRITE(&write_data, BMI2_INT_MAP_DATA_ADDR, 1);
 	return 0;
 }
 
@@ -285,32 +341,31 @@ uint8_t imu_start(void)
 {
 	//start reading data from imu
 	uint8_t write_data = 0;
-	uint16_t config_index = 0;
-	uint16_t burst_len = BURST_BYTE_NUMBER;
-	uint16_t config_length = sizeof(bmi270_config_file);
 	// Steps:
 
 	// 1. Enable accelerometer, gyro data, disable aux
 	write_data = 0x0E;
 	IMU_WRITE(&write_data, BMI2_PWR_CTRL_ADDR, 1);
-	// 2. Accelerometer config
-	write_data = 0xA8;
-	IMU_WRITE(&write_data, BMI2_ACC_CONF_ADDR, 1);
-	// 3. Gyro config
-	write_data = 0xA9;
-	IMU_WRITE(&write_data, BMI2_GYRO_CONF_ADDR, 1);
-	// 4. Disable adv power saving, enable fifo_self_wakeup
+	// 2. Disable adv power saving, enable fifo_self_wakeup
 	write_data = 0x02;
 	IMU_WRITE(&write_data, BMI2_PWR_CONF_ADDR, 1);
-	// 5. Enable reading from interrupt - error from int2, data from int1
-	write_data = 0x84;
-	IMU_WRITE(&write_data, BMI2_INT_MAP_DATA_ADDR, 1);
 	return 0;
 }
 
 uint8_t imu_stop(void)
 {
 	//stop reading data from imu
+	uint8_t write_data = 0x00;
+	// Steps:
+
+	// 1. Disable accelerometer, gyro data, disable aux
+	IMU_WRITE(&write_data, BMI2_PWR_CTRL_ADDR, 1);
+	// 2. Disable reading from interrupt
+	write_data = 0x00;
+	IMU_WRITE(&write_data, BMI2_INT_MAP_DATA_ADDR, 1);
+	// 2. Enable adv power saving
+	write_data = 0x02;
+	IMU_WRITE(&write_data, BMI2_PWR_CONF_ADDR, 1);
 	return 0;
 }
 

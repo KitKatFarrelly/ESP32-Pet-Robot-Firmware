@@ -26,9 +26,9 @@ void IMU_WRITE(uint8_t* IMU_IN, uint8_t IMU_REG, uint8_t in_size);
 
 void IMU_WRITE_LONG(uint8_t* IMU_IN, uint8_t IMU_REG, uint8_t in_size);
 
-void imu_enable_accel(bool enable);
+uint8_t imu_accel_config(void);
 
-void imu_enable_gyro(bool enable);
+uint8_t imu_gyro_config(void);
 
 uint8_t imu_reset(void);
 
@@ -36,7 +36,9 @@ uint8_t imu_check_status(void);
 
 uint8_t imu_check_error(void);
 
-uint8_t imu_set_latched_mode(bool enable);
+uint8_t imu_check_events(void);
+
+uint8_t imu_set_interrupts(void);
 
 uint8_t imu_set_features(uint8_t feature_flags);
 
