@@ -99,19 +99,19 @@ void IMU_READ(uint8_t* IMU_OUT, uint8_t IMU_REG, uint8_t out_size)
 void IMU_READ_LONG(uint8_t* IMU_OUT, uint8_t IMU_REG, uint8_t out_size)
 {
 	esp_err_t ret;
-    spi_transaction_t t;
+    spi_transaction_ext_t t;
     memset(&t, 0, sizeof(t));       //Zero out the transaction
 	t.base.rx_buffer = IMU_OUT;
 	t.base.rxlength = out_size * 8;
 	t.dummy_bits = 8;
-	t.base.flags = SPI_TRANS_USE_RXDATA | SPI_TRANS_VARIABLE_DUMMY;
+	t.base.flags = SPI_TRANS_VARIABLE_DUMMY;
 	t.base.cmd = (0x80 | IMU_REG);
     ret=spi_device_polling_transmit(s_spi_handle, (spi_transaction_t*)&t);  //Transmit!
 	ESP_LOGI(TAG, "error type is %x.", ret);
     assert(ret==ESP_OK);            //Should have had no issues.
 }
 
-void IMU_WRITE(uint8_t* IMU_IN, uint8_t IMU_REG, uint8_t in_size)
+void IMU_WRITE(const uint8_t* IMU_IN, uint8_t IMU_REG, uint8_t in_size)
 {
 	esp_err_t ret;
     spi_transaction_t t;
@@ -128,7 +128,7 @@ void IMU_WRITE(uint8_t* IMU_IN, uint8_t IMU_REG, uint8_t in_size)
     assert(ret==ESP_OK);            //Should have had no issues.
 }
 
-void IMU_WRITE_LONG(uint8_t* IMU_IN, uint8_t IMU_REG, uint8_t in_size)
+void IMU_WRITE_LONG(const uint8_t* IMU_IN, uint8_t IMU_REG, uint8_t in_size)
 {
 	esp_err_t ret;
     spi_transaction_t t;
@@ -220,7 +220,7 @@ uint8_t imu_accel_config(void)
 {
 	//configure acclerometer on sensor
 	// 1. Accelerometer config 100Hz Normal Mode
-	write_data = 0xA8;
+	uint8_t write_data = 0xA8;
 	IMU_WRITE(&write_data, BMI2_ACC_CONF_ADDR, 1);
 	// 2. 4G max range
 	write_data = 0x01;
@@ -232,11 +232,11 @@ uint8_t imu_gyro_config(void)
 {
 	//configure gyro on sensor
 	// 1. Gyro config 200Hz Normal Mode
-	write_data = 0xE9;
-	IMU_WRITE(&write_data, BMI2_GYRO_CONF_ADDR, 1);
+	uint8_t write_data = 0xE9;
+	IMU_WRITE(&write_data, BMI2_GYR_CONF_ADDR, 1);
 	// 2. 2000dps pre and post filter
 	write_data = 0x08;
-	IMU_WRITE(&write_data, BMI2_ACC_RANGE_ADDR, 1);
+	IMU_WRITE(&write_data, BMI2_GYR_RANGE_ADDR, 1);
 	return 0;
 }
 
@@ -276,7 +276,7 @@ uint8_t imu_set_interrupts(void)
 {
 	//configure interrupts
 	// 1. Error Registration - fatal and internal errors
-	write_data = 0x1F;
+	uint8_t write_data = 0x1F;
 	IMU_WRITE(&write_data, BMI2_ERROR_REG_MAP, 1);
 	// 2. INT1 IO - falling edge, push/pull, output enabled
 	write_data = 0x04;
@@ -325,7 +325,7 @@ static void imu_configuration_init(void)
 		// 4. Load address into BMI2_INIT_ADDR_0 (lowest 4 bits) and BMI2_INIT_ADDR_1 (upper 8 bits)
 		IMU_WRITE(write_data, BMI2_INIT_ADDR_0, 2);
 		// 5. write burst of config bytes into BMI2_INIT_DATA_ADDR
-		IMU_WRITE_LONG(bmi270_config_file + config_index, BMI2_INIT_DATA_ADDR, burst_len)
+		IMU_WRITE_LONG(bmi270_config_file + config_index, BMI2_INIT_DATA_ADDR, burst_len);
 		// 6. Increment config index by burst length
 		config_index += burst_len;
 		// 7. Repeat 3-7 until end of file
@@ -373,9 +373,6 @@ static void imu_check_interrupt_data(void *arg)
 {
 	//Read interrupt values and if data is available read imu data
 	uint8_t read_data = 0x00;
-	uint8_t *read_timestamp;
-	uint8_t *read_acc;
-	uint8_t *read_gyr;
 	
 	// 1. Read which data is ready
 	IMU_READ(&read_data, BMI2_INT_STATUS_1_ADDR, 1);

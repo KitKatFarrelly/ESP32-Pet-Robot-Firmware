@@ -867,13 +867,14 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
     }
     else if (component_type == imu_public_component && message_type == IMU_MSG_RAW_DATA)
     {
-        uint32_t timestamp = (message_data.timestamp[2] << 16) + (message_data.timestamp[1] << 8) + message_data.timestamp[0];
+        IMU_DATA_RAW_t *imu_data = (IMU_DATA_RAW_t *) message_data;
+        uint32_t timestamp = (imu_data->timestamp[2] << 16) + (imu_data->timestamp[1] << 8) + imu_data->timestamp[0];
         ESP_LOGI(TAG, "timestamp %lu imu data:", timestamp);
         for(uint8_t i = 0; i < 3; i++)
         {
-            uint16_t raw_accel = (imu_data.acc_data[2i + 1] << 8) + imu_data.acc_data[2i];
-            uint16_t raw_gyro = (imu_data.gyr_data[2i + 1] << 8) + imu_data.gyr_data[2i];
-            ESP_LOGI(TAG, "%u: accel %04u, gyro %04u", raw_accel, raw_gyro);
+            uint16_t raw_accel = (imu_data->acc_data[(2*i) + 1] << 8) + imu_data->acc_data[(2*i)];
+            uint16_t raw_gyro = (imu_data->gyr_data[(2*i) + 1] << 8) + imu_data->gyr_data[(2*i)];
+            ESP_LOGI(TAG, "%u: accel %04x, gyro %04x", i, raw_accel, raw_gyro);
         }
     }
     
