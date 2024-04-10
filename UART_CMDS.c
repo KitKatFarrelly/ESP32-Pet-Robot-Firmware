@@ -28,6 +28,7 @@ static component_handle_t s_uart_component_handle = 0;
 static bool s_has_component_handle = false;
 static callback_handle_t UART_callback_handles[dispatcher_max] = {0};
 static callback_handle_t s_ToF_callback_handle;
+static callback_handle_t s_imu_callback_handle;
 
 // helper functions
 
@@ -709,6 +710,49 @@ static void uart_imu_cmds(uint8_t argc, char** argv)
             ESP_LOGI(TAG, "%x", write_bytes[i]);
         }
         IMU_WRITE(write_bytes, write_reg, write_cnt);
+    }
+    else if(strcmp((char*) argv[1], (const char*) "start_measurements") == 0)
+    {
+        //start taking measurements from sensor
+        s_imu_callback_handle = register_priority_handler_for_messages(uart_msg_queue_handler, imu_public_component);
+        imu_accel_config();
+        imu_gyro_config();
+        imu_set_interrupts();
+        uint8_t err = imu_start();
+        ESP_LOGI(TAG, "Error code is: %u", err);
+    }
+    else if(strcmp((char*) argv[1], (const char*) "stop_measurements") == 0)
+    {
+        //stop taking measurements from sensor
+        uint8_t err = imu_stop();
+        ESP_LOGI(TAG, "Error code is: %u", err);
+        err = unregister_priority_handler_for_messages(imu_public_component, s_imu_callback_handle);
+        ESP_LOGI(TAG, "Unreigster error code is: %u", err);
+        s_imu_callback_handle = 0;
+    }
+    else if(strcmp((char*) argv[1], (const char*) "reset") == 0)
+    {
+        //soft reset sensor
+        uint8_t err = imu_reset();
+        ESP_LOGI(TAG, "Error code is: %u", err);
+    }
+    else if(strcmp((char*) argv[1], (const char*) "check_status") == 0)
+    {
+        //check imu status register
+        uint8_t err = imu_check_status();
+        ESP_LOGI(TAG, "Status register is: 0x%x", err);
+    }
+    else if(strcmp((char*) argv[1], (const char*) "check_error") == 0)
+    {
+        //check imu error register
+        uint8_t err = imu_check_error();
+        ESP_LOGI(TAG, "Error register is: 0x%x", err);
+    }
+    else if(strcmp((char*) argv[1], (const char*) "check_events") == 0)
+    {
+        //check imu event register
+        uint8_t err = imu_check_events();
+        ESP_LOGI(TAG, "Event register is: 0x%x", err);
     }
 }
 
