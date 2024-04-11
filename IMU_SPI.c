@@ -9,6 +9,7 @@
 #include "driver/spi_master.h"
 #include "driver/spi_common.h"
 #include "driver/gpio.h"
+#include "freertos/timers.h"
 #endif
 
 #include "IMU_SPI.h"
@@ -67,10 +68,11 @@ static const char *TAG = "SPI_LOG";
 static spi_device_handle_t s_spi_handle = NULL;
 static IMU_DATA_RAW_t s_imu_measurement_buffer[IMU_BUF_SIZE] = {0};
 static uint8_t s_imu_buf_iter = 0;
+TimerHandle_t s_imu_timer = NULL;
 
 // static functions
 static void imu_configuration_init(void);
-static void imu_check_interrupt_data(void *arg);
+static void imu_check_interrupt_data(TimerHandle_t xTimer);
 static void imu_check_interrupt_err(void *arg);
 
 // Externs
@@ -88,7 +90,6 @@ void IMU_READ(uint8_t* IMU_OUT, uint8_t IMU_REG, uint8_t out_size)
 	t.base.flags = SPI_TRANS_USE_RXDATA | SPI_TRANS_VARIABLE_DUMMY;
 	t.base.cmd = (0x80 | IMU_REG);
     ret=spi_device_polling_transmit(s_spi_handle, (spi_transaction_t*)&t);  //Transmit!
-	ESP_LOGI(TAG, "error type is %x.", ret);
     assert(ret==ESP_OK);            //Should have had no issues.
     for(uint8_t i = 0; i < out_size && i < 4; i++)
 	{
@@ -107,7 +108,6 @@ void IMU_READ_LONG(uint8_t* IMU_OUT, uint8_t IMU_REG, uint8_t out_size)
 	t.base.flags = SPI_TRANS_VARIABLE_DUMMY;
 	t.base.cmd = (0x80 | IMU_REG);
     ret=spi_device_polling_transmit(s_spi_handle, (spi_transaction_t*)&t);  //Transmit!
-	ESP_LOGI(TAG, "error type is %x.", ret);
     assert(ret==ESP_OK);            //Should have had no issues.
 }
 
@@ -124,7 +124,6 @@ void IMU_WRITE(const uint8_t* IMU_IN, uint8_t IMU_REG, uint8_t in_size)
 	t.flags = SPI_TRANS_USE_TXDATA;
 	t.cmd = IMU_REG;
     ret=spi_device_polling_transmit(s_spi_handle, &t);  //Transmit!
-	ESP_LOGI(TAG, "error type is %x.", ret);
     assert(ret==ESP_OK);            //Should have had no issues.
 }
 
@@ -137,7 +136,6 @@ void IMU_WRITE_LONG(const uint8_t* IMU_IN, uint8_t IMU_REG, uint8_t in_size)
 	t.length = 8 * in_size;
 	t.cmd = IMU_REG;
     ret=spi_device_polling_transmit(s_spi_handle, &t);  //Transmit!
-	ESP_LOGI(TAG, "error type is %x.", ret);
     assert(ret==ESP_OK);            //Should have had no issues.
 }
 
@@ -173,9 +171,12 @@ void IMU_INIT(void)
     io_conf.pull_up_en = 0;
     gpio_config(&io_conf);
 
-	//SPI INTERRUPT HANDLERS
+	//SPI INTERRUPT HANDLERS - again commenting out for now bc they dont work
+	/*
 	gpio_isr_handler_add(IMU_INT1, imu_check_interrupt_data, NULL);
 	gpio_isr_handler_add(IMU_INT2, imu_check_interrupt_err, NULL);
+	*/
+	s_imu_timer = xTimerCreate("imu_timer", 8 / portTICK_PERIOD_MS, pdTRUE, (void*) 0, imu_check_interrupt_data);
 	
 	esp_err_t ret;
 	spi_bus_config_t buscfg={
@@ -231,8 +232,8 @@ uint8_t imu_accel_config(void)
 uint8_t imu_gyro_config(void)
 {
 	//configure gyro on sensor
-	// 1. Gyro config 200Hz Normal Mode
-	uint8_t write_data = 0xE9;
+	// 1. Gyro config 100Hz Normal Mode
+	uint8_t write_data = 0xE8;
 	IMU_WRITE(&write_data, BMI2_GYR_CONF_ADDR, 1);
 	// 2. 2000dps pre and post filter
 	write_data = 0x08;
@@ -333,7 +334,7 @@ static void imu_configuration_init(void)
 	// 8. Enable Loading Config
 	write_data[0] = 1;
 	write_data[1] = 0;
-	IMU_WRITE(write_data, BMI2_PWR_CONF_ADDR, 1);
+	IMU_WRITE(write_data, BMI2_INIT_CTRL_ADDR, 1);
 	ESP_LOGI(TAG, "init successful");
 }
 
@@ -349,6 +350,10 @@ uint8_t imu_start(void)
 	// 2. Disable adv power saving, enable fifo_self_wakeup
 	write_data = 0x02;
 	IMU_WRITE(&write_data, BMI2_PWR_CONF_ADDR, 1);
+	if(!xTimerIsTimerActive(s_imu_timer))
+	{
+		xTimerStart(s_imu_timer, 0);
+	}
 	return 0;
 }
 
@@ -366,13 +371,19 @@ uint8_t imu_stop(void)
 	// 2. Enable adv power saving
 	write_data = 0x02;
 	IMU_WRITE(&write_data, BMI2_PWR_CONF_ADDR, 1);
+	if(xTimerIsTimerActive(s_imu_timer))
+	{
+		xTimerStop(s_imu_timer, 0);
+	}
 	return 0;
 }
 
-static void imu_check_interrupt_data(void *arg)
+static void imu_check_interrupt_data(TimerHandle_t xTimer)
 {
 	//Read interrupt values and if data is available read imu data
 	uint8_t read_data = 0x00;
+
+	ESP_LOGI(TAG, "interrupts are GPIO38: %u, GPIO39: %u.", gpio_get_level(IMU_INT1), gpio_get_level(IMU_INT2));
 	
 	// 1. Read which data is ready
 	IMU_READ(&read_data, BMI2_INT_STATUS_1_ADDR, 1);
