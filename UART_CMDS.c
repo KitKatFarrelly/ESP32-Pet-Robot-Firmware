@@ -17,6 +17,7 @@
 #include "FLASH_SPI.h"
 #include "IMU_SPI.h"
 #include "MESSAGE_QUEUE.h"
+#include "MTR_DRVR.h"
 
 #define UART_MAX_ARGS 10
 #define UART_INVALID_CHARACTER 100
@@ -35,6 +36,8 @@ static callback_handle_t s_imu_callback_handle;
 static uint8_t uart_get_hex_from_char(char to_convert);
 static dispatcher_type_t uart_get_dispatcher(char * disp_str);
 static uint8_t uart_convert_str_to_args(char * cmd_buf, char** argv_ptr, uint8_t argv_max);
+static uint8_t uart_convert_str_to_handedness(char * cmd_buf);
+static mtr_direction_t uart_convert_str_to_direction(char * cmd_buf);
 static void run_command(uint8_t rx_size, char *buf);
 
 // message queue functions
@@ -51,6 +54,7 @@ static void uart_tof_cmds(uint8_t argc, char** argv);
 static void uart_flash_cmds(uint8_t argc, char** argv);
 static void uart_msg_queue_cmds(uint8_t argc, char** argv);
 static void uart_imu_cmds(uint8_t argc, char** argv);
+static void uart_mtr_cmds(uint8_t argc, char** argv);
 
 // function defs
 
@@ -754,6 +758,159 @@ static void uart_imu_cmds(uint8_t argc, char** argv)
         uint8_t err = imu_check_events();
         ESP_LOGI(TAG, "Event register is: 0x%x", err);
     }
+}
+
+static void uart_mtr_cmds(uint8_t argc, char** argv)
+{
+    if(argc < 2)
+    {
+        ESP_LOGE(TAG, "incorrect number of args");
+        return;
+    }
+    if(strcmp((char*) argv[1], (const char*) "set_direction") == 0)
+    {
+        if(argc < 4)
+        {
+            ESP_LOGE(TAG, "Incorrect size args");
+            return;
+        }
+        uint8_t handedness_val = uart_convert_str_to_handedness((char*) argv[2])
+        mtr_direction_t is_direction = uart_convert_str_to_direction((char*) argv[3]);
+        bool is_right = (handedness_val > 2);
+        if(!handedness_val)
+        {
+            ESP_LOGE(TAG, "handedness not set");
+            return;
+        }
+        if(is_direction == MTR_DIR_INVALID)
+        {
+            ESP_LOGE(TAG, "invalid direction");
+            return;
+        }
+        mtr_set_direction(is_right, is_direction);
+        ESP_LOGI(TAG, "set motor %u to direction %u", is_right, is_direction);
+    }
+    if(strcmp((char*) argv[1], (const char*) "set_duty") == 0)
+    {
+        if(argc < 4)
+        {
+            ESP_LOGE(TAG, "Incorrect size args");
+            return;
+        }
+        uint8_t handedness_val = uart_convert_str_to_handedness((char*) argv[2])
+        bool is_right = (handedness_val > 2);
+        if(!handedness_val)
+        {
+            ESP_LOGE(TAG, "handedness not set");
+            return;
+        }
+        uint16_t read_duty = 0;
+        for(uint16_t i = 0; i < strlen(argv[3]); i++)
+        {
+            if(argv[3][i] >= '0' && argv[3][i] <= '9')
+            {
+                read_duty = read_duty * 10;
+                read_duty += (uint16_t) (argv[3][i] - '0');
+            }
+        }
+        if(read_duty > 8191)
+        {
+            ESP_LOGE(TAG, "invalid duty cycle");
+            return;
+        }
+        mtr_set_duty(is_right, read_duty);
+        ESP_LOGI(TAG, "set motor %u to duty cycle %u of 8192", is_right, read_duty);
+    }
+    if(strcmp((char*) argv[1], (const char*) "set_standby") == 0)
+    {
+        if(argc < 3)
+        {
+            ESP_LOGE(TAG, "Incorrect size args");
+            return;
+        }
+        bool is_standby = false;
+        if(strcmp((char*) argv[2], (const char*) "on"))
+        {
+            is_standby = true;
+        }
+        else if(!strcmp((char*) argv[2], (const char*) "off"))
+        {
+            ESP_LOGE(TAG, "invalid standby state");
+            return;
+        }
+        mtr_set_standby(is_standby);
+        ESP_LOGI(TAG, "set standby state to %u", is_standby);
+    }
+    if(strcmp((char*) argv[1], (const char*) "get_direction") == 0)
+    {
+        if(argc < 3)
+        {
+            ESP_LOGE(TAG, "Incorrect size args");
+            return;
+        }
+        uint8_t handedness_val = uart_convert_str_to_handedness((char*) argv[2])
+        bool is_right = (handedness_val > 2);
+        if(!handedness_val)
+        {
+            ESP_LOGE(TAG, "handedness not set");
+            return;
+        }
+        ESP_LOGI(TAG, "motor %u is in direction %u", is_right, mtr_get_direction(is_right));
+    }
+    if(strcmp((char*) argv[1], (const char*) "get_duty") == 0)
+    {
+        if(argc < 3)
+        {
+            ESP_LOGE(TAG, "Incorrect size args");
+            return;
+        }
+        uint8_t handedness_val = uart_convert_str_to_handedness((char*) argv[2])
+        bool is_right = (handedness_val > 2);
+        if(!handedness_val)
+        {
+            ESP_LOGE(TAG, "handedness not set");
+            return;
+        }
+        ESP_LOGI(TAG, "motor %u is in duty %u", is_right, mtr_get_duty(is_right));
+    }
+    if(strcmp((char*) argv[1], (const char*) "get_standby") == 0)
+    {
+        ESP_LOGI(TAG, "standby state is %u", mtr_get_standby());
+    }
+}
+
+static uint8_t uart_convert_str_to_handedness(char * cmd_buf)
+{
+    if(strcmp(cmd_buf, (const char*) "right"))
+    {
+        return 2;
+    }
+    else if(strcmp(cmd_buf, (const char*) "left"))
+    {
+        return 1;
+    }
+    return 0;
+}
+
+static mtr_direction_t uart_convert_str_to_direction(char * cmd_buf)
+{
+    if(strcmp(cmd_buf, (const char*) "stopped"))
+    {
+        return MTR_DIR_STOPPED;
+    }
+    else if(strcmp(cmd_buf, (const char*) "forward"))
+    {
+        return MTR_DIR_FORWARD;
+    }
+    else if(strcmp(cmd_buf, (const char*) "reverse"))
+    {
+        return MTR_DIR_REVERSE;
+    }
+    else if(strcmp(cmd_buf, (const char*) "standby"))
+    {
+        return MTR_DIR_NOT_SET;
+    }
+    return MTR_DIR_INVALID;
 }
 
 static uint8_t uart_get_hex_from_char(char to_convert)

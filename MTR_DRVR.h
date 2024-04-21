@@ -7,6 +7,7 @@ typedef enum
     MTR_DIR_STOPPED = 1,
     MTR_DIR_FORWARD = 2,
     MTR_DIR_REVERSE = 3,
+    MTR_DIR_INVALID = 4,
 } mtr_direction_t;
 
 void MTR_INIT(void);
