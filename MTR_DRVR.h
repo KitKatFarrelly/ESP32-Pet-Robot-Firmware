@@ -19,4 +19,8 @@ mtr_direction_t mtr_get_direction(bool is_right);
 
 uint16_t mtr_get_duty(bool is_right);
 
+void mtr_set_standby(bool standby);
+
+bool mtr_get_standby(void);
+
 #endif
