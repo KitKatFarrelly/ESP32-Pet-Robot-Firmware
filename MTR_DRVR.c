@@ -9,6 +9,14 @@
 
 #include "MTR_DRVR.h"
 
+//Motor Definitions
+
+#define MTR_STBY  GPIO_NUM_4
+#define MTR_R_IN1 GPIO_NUM_5
+#define MTR_R_IN2 GPIO_NUM_6
+#define MTR_L_IN1 GPIO_NUM_7
+#define MTR_L_IN2 GPIO_NUM_8
+
 #define GPIO_MTR_PIN_SEL  ((1ULL<<MTR_STBY) | (1ULL<<MTR_R_IN1) | (1ULL<<MTR_R_IN2) | (1ULL<<MTR_L_IN1) | (1ULL<<MTR_L_IN2))
 
 void MTR_INIT(void)
@@ -32,4 +40,24 @@ void MTR_INIT(void)
     gpio_config(&io_conf);
 
 #endif
+}
+
+void mtr_set_direction(bool is_right, mtr_direction_t direction)
+{
+    //set which output channel is being used for motor
+}
+
+void mtr_set_duty(bool is_right, uint16_t duty_cycle)
+{
+    //set LED PWM duty for motor
+}
+
+mtr_direction_t mtr_get_direction(bool is_right)
+{
+    //return the directon of the motor
+}
+
+uint16_t mtr_get_duty(bool is_right)
+{
+    //get LED PWM duty for motor
 }
