@@ -4,6 +4,7 @@
 #ifdef FUNCTIONAL_TESTS
 #include "mocked_functions.h"
 #else
+#include "esp_log.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h"
 #endif
@@ -231,9 +232,9 @@ mtr_context_t mtr_get_context_from_handedness(bool is_right)
 {
     mtr_context_t mtr_context = 
     {
-        .channel_fwd = MTR_L_IN1_CHANNEL;
-        .channel_bck = MTR_L_IN2_CHANNEL;
-    }
+        .channel_fwd = MTR_L_IN1_CHANNEL,
+        .channel_bck = MTR_L_IN2_CHANNEL,
+    };
     if(is_right)
     {
         mtr_context.channel_fwd = MTR_R_IN1_CHANNEL;

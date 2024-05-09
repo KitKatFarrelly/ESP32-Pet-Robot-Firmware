@@ -778,7 +778,7 @@ static void uart_mtr_cmds(uint8_t argc, char** argv)
             ESP_LOGE(TAG, "Incorrect size args");
             return;
         }
-        uint8_t handedness_val = uart_convert_str_to_handedness((char*) argv[2])
+        uint8_t handedness_val = uart_convert_str_to_handedness((char*) argv[2]);
         mtr_direction_t is_direction = uart_convert_str_to_direction((char*) argv[3]);
         bool is_right = (handedness_val > 2);
         if(!handedness_val)
@@ -801,7 +801,7 @@ static void uart_mtr_cmds(uint8_t argc, char** argv)
             ESP_LOGE(TAG, "Incorrect size args");
             return;
         }
-        uint8_t handedness_val = uart_convert_str_to_handedness((char*) argv[2])
+        uint8_t handedness_val = uart_convert_str_to_handedness((char*) argv[2]);
         bool is_right = (handedness_val > 2);
         if(!handedness_val)
         {
@@ -852,7 +852,7 @@ static void uart_mtr_cmds(uint8_t argc, char** argv)
             ESP_LOGE(TAG, "Incorrect size args");
             return;
         }
-        uint8_t handedness_val = uart_convert_str_to_handedness((char*) argv[2])
+        uint8_t handedness_val = uart_convert_str_to_handedness((char*) argv[2]);
         bool is_right = (handedness_val > 2);
         if(!handedness_val)
         {
@@ -868,7 +868,7 @@ static void uart_mtr_cmds(uint8_t argc, char** argv)
             ESP_LOGE(TAG, "Incorrect size args");
             return;
         }
-        uint8_t handedness_val = uart_convert_str_to_handedness((char*) argv[2])
+        uint8_t handedness_val = uart_convert_str_to_handedness((char*) argv[2]);
         bool is_right = (handedness_val > 2);
         if(!handedness_val)
         {
@@ -1053,7 +1053,7 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
             {
                 s_serial_out[3] = 32; //32 bytes of data
             }
-            s_serial_out[4] = 4 //data type is ToF
+            s_serial_out[4] = 4; //data type is ToF
         }
         else
         {
@@ -1166,7 +1166,7 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
         s_serial_out[5 + s_serial_out[3]] = checksum; //checksum
         s_serial_out[6 + s_serial_out[3]] = 0;
         //write data out via UART
-        fwrite(s_serial_out, sizeof(uint8_t), 6 + s_serial_out[3], stdout)
+        fwrite(s_serial_out, sizeof(uint8_t), 6 + s_serial_out[3], stdout);
     }
 }
 
@@ -1290,7 +1290,7 @@ static void run_command(uint8_t rx_size, char *buf)
         }
         case motor:
         {
-            ESP_LOGI(TAG, "Motor commands not implemented");
+            uart_mtr_cmds(argc, argv);
             break;
         }
         case led:
@@ -1305,7 +1305,7 @@ static void run_command(uint8_t rx_size, char *buf)
         }
         case uart:
         {
-            ESP_LOGI(TAG, "UART commands not implemented");
+            uart_serial_cmds(argc, argv);
             break;
         }
         default:
