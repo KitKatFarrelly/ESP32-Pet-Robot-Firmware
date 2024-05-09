@@ -21,15 +21,18 @@
 
 #define UART_MAX_ARGS 10
 #define UART_INVALID_CHARACTER 100
+#define UART_SERIAL_MAX 200
 
 static const char *TAG = "USB_UART";
 
 // static variables
 static component_handle_t s_uart_component_handle = 0;
 static bool s_has_component_handle = false;
+static bool s_serialize = false;
 static callback_handle_t UART_callback_handles[dispatcher_max] = {0};
 static callback_handle_t s_ToF_callback_handle;
 static callback_handle_t s_imu_callback_handle;
+static uint8_t s_serial_out[UART_SERIAL_MAX] = {0};
 
 // helper functions
 
@@ -55,6 +58,7 @@ static void uart_flash_cmds(uint8_t argc, char** argv);
 static void uart_msg_queue_cmds(uint8_t argc, char** argv);
 static void uart_imu_cmds(uint8_t argc, char** argv);
 static void uart_mtr_cmds(uint8_t argc, char** argv);
+static void uart_serial_cmds(uint8_t argc, char** argv);
 
 // function defs
 
@@ -879,6 +883,27 @@ static void uart_mtr_cmds(uint8_t argc, char** argv)
     }
 }
 
+static void uart_serial_cmds(uint8_t argc, char** argv)
+{
+    if(argc < 3)
+    {
+        ESP_LOGE(TAG, "incorrect number of args");
+        return;
+    }
+    if(strcmp((char*) argv[1], (const char*) "set_serialize") == 0)
+    {
+        if(strcmp((char*) argv[1], (const char*) "true") == 0)
+        {
+            s_serialize = true;
+        }
+        else if(strcmp((char*) argv[1], (const char*) "false") == 0)
+        {
+            s_serialize = false; 
+        }
+        ESP_LOGI(TAG, "serial value set to %d", s_serialize);
+    }
+}
+
 static uint8_t uart_convert_str_to_handedness(char * cmd_buf)
 {
     if(strcmp(cmd_buf, (const char*) "right"))
@@ -997,7 +1022,16 @@ static uint8_t uart_convert_str_to_args(char * cmd_buf, char** argv_ptr, uint8_t
 static void uart_msg_queue_handler(component_handle_t component_type, uint8_t message_type, void* message_data, size_t message_size)
 {
     dispatcher_type_t dispatcher = uart_get_dispatcher_from_component(component_type);
-    ESP_LOGI(TAG, "message from %s with message type %u and size %u.", uart_return_string_from_dispatcher(dispatcher), message_type, message_size);
+    uint8_t checksum = 0;
+    s_serial_out[0] = 254;
+    s_serial_out[1] = 254;
+    s_serial_out[2] = 254;
+    s_serial_out[3] = 0; //invalid size
+    s_serial_out[4] = 0; //invalid type
+    if(!s_serialize)
+    {
+        ESP_LOGI(TAG, "message from %s with message type %u and size %u.", uart_return_string_from_dispatcher(dispatcher), message_type, message_size);
+    }
     if(component_type == ToF_public_component && message_type == TOF_MSG_NEW_DEPTH_ARRAY)
     {
         //write TOF_DATA_t to console
@@ -1005,19 +1039,62 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
         uint8_t h_size = tof_data->horizontal_size;
         uint8_t v_size = tof_data->vertical_size;
         uint16_t** array_ptr = tof_data->depth_pixel_field;
-        ESP_LOGI(TAG, "outputting %ux%u depth array:", h_size, v_size);
+        if(s_serialize)
+        {
+            //write header data to s_serial_out
+            s_serial_out[0] = 254;
+            s_serial_out[1] = 254;
+            s_serial_out[2] = 254;
+            if(h_size == 8)
+            {
+                s_serial_out[3] = 128; //128 bytes of data
+            }
+            else
+            {
+                s_serial_out[3] = 32; //32 bytes of data
+            }
+            s_serial_out[4] = 4 //data type is ToF
+        }
+        else
+        {
+            ESP_LOGI(TAG, "outputting %ux%u depth array:", h_size, v_size);
+        }
         for(uint8_t j = 0; j < v_size; j++)
         {
             if(h_size == 8)
             {
-                ESP_LOGI(TAG, "%04u %04u %04u %04u %04u %04u %04u %04u", 
+                if(s_serialize)
+                {
+                    //serialize 128 bytes of data
+                    for(uint8_t k = 0; k < v_size; k++)
+                    {
+                        s_serial_out[(16*j) + (k*2) + 5] = array_ptr[j][k] & 0xFF;
+                        s_serial_out[(16*j) + (k*2) + 6] = (array_ptr[j][k] >> 8);
+                    }
+                }
+                else
+                {
+                    ESP_LOGI(TAG, "%04u %04u %04u %04u %04u %04u %04u %04u", 
                         array_ptr[j][0], array_ptr[j][1], array_ptr[j][2], array_ptr[j][3],
                         array_ptr[j][4], array_ptr[j][5], array_ptr[j][6], array_ptr[j][7]);
+                }
             }
             else if(h_size == 4)
             {
-                ESP_LOGI(TAG, "%04u %04u %04u %04u", 
+                if(s_serialize)
+                {
+                    //serialize 32 bytes of data
+                    for(uint8_t k = 0; k < v_size; k++)
+                    {
+                        s_serial_out[(8*j) + (k*2) + 5] = array_ptr[j][k] & 0xFF;
+                        s_serial_out[(8*j) + (k*2) + 6] = (array_ptr[j][k] >> 8);
+                    }
+                }
+                else
+                {
+                    ESP_LOGI(TAG, "%04u %04u %04u %04u", 
                         array_ptr[j][0], array_ptr[j][1], array_ptr[j][2], array_ptr[j][3]);
+                }
             }
             
         }
@@ -1026,15 +1103,49 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
     {
         IMU_DATA_RAW_t *imu_data = (IMU_DATA_RAW_t *) message_data;
         uint32_t timestamp = (imu_data->timestamp[2] << 16) + (imu_data->timestamp[1] << 8) + imu_data->timestamp[0];
-        ESP_LOGI(TAG, "timestamp %lu imu data:", timestamp);
-        for(uint8_t i = 0; i < 3; i++)
+        if(s_serialize)
         {
-            uint16_t raw_accel = (imu_data->acc_data[(2*i) + 1] << 8) + imu_data->acc_data[(2*i)];
-            uint16_t raw_gyro = (imu_data->gyr_data[(2*i) + 1] << 8) + imu_data->gyr_data[(2*i)];
-            ESP_LOGI(TAG, "%u: accel %04x, gyro %04x", i, raw_accel, raw_gyro);
+            //write header data to s_serial_out
+            s_serial_out[0] = 254;
+            s_serial_out[1] = 254;
+            s_serial_out[2] = 254;
+            s_serial_out[3] = 3;
+            s_serial_out[4] = imu_data->flags; //data type is acc (1), gyro (2), or both (3)
+            s_serial_out[5] = imu_data->timestamp[0];
+            s_serial_out[6] = imu_data->timestamp[1];
+            s_serial_out[7] = imu_data->timestamp[2];
+            if(imu_data->flags & 0x01)
+            {
+                s_serial_out[5 + s_serial_out[3]] = imu_data->acc_data[0];
+                s_serial_out[6 + s_serial_out[3]] = imu_data->acc_data[1];
+                s_serial_out[7 + s_serial_out[3]] = imu_data->acc_data[2];
+                s_serial_out[8 + s_serial_out[3]] = imu_data->acc_data[3];
+                s_serial_out[9 + s_serial_out[3]] = imu_data->acc_data[4];
+                s_serial_out[10 + s_serial_out[3]] = imu_data->acc_data[5];
+                s_serial_out[3] += 6;
+            }
+            if(imu_data->flags & 0x02)
+            {
+                s_serial_out[5 + s_serial_out[3]] = imu_data->gyr_data[0];
+                s_serial_out[6 + s_serial_out[3]] = imu_data->gyr_data[1];
+                s_serial_out[7 + s_serial_out[3]] = imu_data->gyr_data[2];
+                s_serial_out[8 + s_serial_out[3]] = imu_data->gyr_data[3];
+                s_serial_out[9 + s_serial_out[3]] = imu_data->gyr_data[4];
+                s_serial_out[10 + s_serial_out[3]] = imu_data->gyr_data[5];
+                s_serial_out[3] += 6;
+            }
+        }
+        else
+        {
+            ESP_LOGI(TAG, "timestamp %lu imu data:", timestamp);
+            for(uint8_t i = 0; i < 3; i++)
+            {
+                uint16_t raw_accel = (imu_data->acc_data[(2*i) + 1] << 8) + imu_data->acc_data[(2*i)];
+                uint16_t raw_gyro = (imu_data->gyr_data[(2*i) + 1] << 8) + imu_data->gyr_data[(2*i)];
+                ESP_LOGI(TAG, "%u: accel %04x, gyro %04x", i, raw_accel, raw_gyro);
+            }
         }
     }
-    
     else
     {
         if(message_size > 200)
@@ -1045,6 +1156,17 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
         ESP_LOGI(TAG, "message data:");
         char* output_data = (char*) message_data;
         ESP_LOGI(TAG, "%s", output_data);
+    }
+    if(s_serialize)
+    {
+        for(uint8_t check_size = 0; check_size < (s_serial_out[3] + 5); check_size++)
+        {
+            checksum = checksum ^ s_serial_out[check_size];
+        }
+        s_serial_out[5 + s_serial_out[3]] = checksum; //checksum
+        s_serial_out[6 + s_serial_out[3]] = 0;
+        //write data out via UART
+        fwrite(s_serial_out, sizeof(uint8_t), 6 + s_serial_out[3], stdout)
     }
 }
 

@@ -382,6 +382,7 @@ static void imu_check_interrupt_data(TimerHandle_t xTimer)
 {
 	//Read interrupt values and if data is available read imu data
 	uint8_t read_data = 0x00;
+	s_imu_measurement_buffer[s_imu_buf_iter].flags = 0;
 
 	ESP_LOGI(TAG, "interrupts are GPIO38: %u, GPIO39: %u.", gpio_get_level(IMU_INT1), gpio_get_level(IMU_INT2));
 	
@@ -396,11 +397,13 @@ static void imu_check_interrupt_data(TimerHandle_t xTimer)
 	if(read_data & 0x80)
 	{
 		IMU_READ_LONG(s_imu_measurement_buffer[s_imu_buf_iter].acc_data, BMI2_ACC_X_LSB_ADDR, 6);
+		s_imu_measurement_buffer[s_imu_buf_iter].flags = 1;
 	}
 	// 3. read gyro data if available
 	if(read_data & 0x40)
 	{
 		IMU_READ_LONG(s_imu_measurement_buffer[s_imu_buf_iter].gyr_data, BMI2_GYR_X_LSB_ADDR, 6);
+		s_imu_measurement_buffer[s_imu_buf_iter].flags += 2;
 	}
 	// 4. send raw imu data to message queue
 	if(check_is_queue_active(1))

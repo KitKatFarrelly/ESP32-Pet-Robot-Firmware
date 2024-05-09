@@ -10,6 +10,7 @@ typedef struct
     uint8_t acc_data[6];
     uint8_t gyr_data[6];
     uint8_t timestamp[3];
+    uint8_t flags;
 } IMU_DATA_RAW_t;
 
 typedef enum
