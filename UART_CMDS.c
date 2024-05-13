@@ -1023,9 +1023,9 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
 {
     dispatcher_type_t dispatcher = uart_get_dispatcher_from_component(component_type);
     uint8_t checksum = 0;
-    s_serial_out[0] = 254;
-    s_serial_out[1] = 254;
-    s_serial_out[2] = 254;
+    s_serial_out[0] = 'i';
+    s_serial_out[1] = 'n';
+    s_serial_out[2] = 'v';
     s_serial_out[3] = 0; //invalid size
     s_serial_out[4] = 0; //invalid type
     if(!s_serialize)
@@ -1042,9 +1042,9 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
         if(s_serialize)
         {
             //write header data to s_serial_out
-            s_serial_out[0] = 254;
-            s_serial_out[1] = 254;
-            s_serial_out[2] = 254;
+            s_serial_out[0] = 'r';
+            s_serial_out[1] = 'a';
+            s_serial_out[2] = 'w';
             if(h_size == 8)
             {
                 s_serial_out[3] = 128; //128 bytes of data
@@ -1106,9 +1106,9 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
         if(s_serialize)
         {
             //write header data to s_serial_out
-            s_serial_out[0] = 254;
-            s_serial_out[1] = 254;
-            s_serial_out[2] = 254;
+            s_serial_out[0] = 'r';
+            s_serial_out[1] = 'a';
+            s_serial_out[2] = 'w';
             s_serial_out[3] = 3;
             s_serial_out[4] = imu_data->flags; //data type is acc (1), gyro (2), or both (3)
             s_serial_out[5] = imu_data->timestamp[0];
