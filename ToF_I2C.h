@@ -11,7 +11,7 @@
 
 typedef struct
 {
-    uint16_t** depth_pixel_field;
+    uint32_t** depth_pixel_field;
     uint8_t horizontal_size;
     uint8_t vertical_size;
     bool is_populated;

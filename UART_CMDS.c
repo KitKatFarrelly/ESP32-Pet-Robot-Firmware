@@ -1040,7 +1040,7 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
         TOF_DATA_t* tof_data = (TOF_DATA_t*) message_data;
         uint8_t h_size = tof_data->horizontal_size;
         uint8_t v_size = tof_data->vertical_size;
-        uint16_t** array_ptr = tof_data->depth_pixel_field;
+        uint32_t** array_ptr = tof_data->depth_pixel_field;
         if(s_serialize)
         {
             //write header data to s_serial_out
@@ -1050,11 +1050,11 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
             s_serial_out[3] = 'w';
             if(h_size == 8)
             {
-                s_serial_out[4] = 128; //128 bytes of data
+                s_serial_out[4] = 192; //128 bytes of data
             }
             else
             {
-                s_serial_out[4] = 32; //32 bytes of data
+                s_serial_out[4] = 48; //32 bytes of data
             }
             s_serial_out[5] = 4; //data type is ToF
         }
@@ -1071,13 +1071,14 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
                     //serialize 128 bytes of data
                     for(uint8_t k = 0; k < v_size; k++)
                     {
-                        s_serial_out[(16*j) + (k*2) + RAW_HEADER_BASE] = array_ptr[j][k] & 0xFF;
-                        s_serial_out[(16*j) + (k*2) + RAW_HEADER_BASE + 1] = (array_ptr[j][k] >> 8);
+                        s_serial_out[(24*j) + (k*3) + RAW_HEADER_BASE] = array_ptr[j][k] & 0xFF;
+                        s_serial_out[(24*j) + (k*3) + RAW_HEADER_BASE + 1] = ((array_ptr[j][k] >> 8) & 0xFF);
+                        s_serial_out[(24*j) + (k*3) + RAW_HEADER_BASE + 2] = ((array_ptr[j][k] >> 24) & 0xFF);
                     }
                 }
                 else
                 {
-                    ESP_LOGI(TAG, "%04u %04u %04u %04u %04u %04u %04u %04u", 
+                    ESP_LOGI(TAG, "%04lu %04lu %04lu %04lu %04lu %04lu %04lu %04lu", 
                         array_ptr[j][0], array_ptr[j][1], array_ptr[j][2], array_ptr[j][3],
                         array_ptr[j][4], array_ptr[j][5], array_ptr[j][6], array_ptr[j][7]);
                 }
@@ -1089,13 +1090,14 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
                     //serialize 32 bytes of data
                     for(uint8_t k = 0; k < v_size; k++)
                     {
-                        s_serial_out[(8*j) + (k*2) + RAW_HEADER_BASE] = array_ptr[j][k] & 0xFF;
-                        s_serial_out[(8*j) + (k*2) + RAW_HEADER_BASE + 1] = (array_ptr[j][k] >> 8);
+                        s_serial_out[(24*j) + (k*3) + RAW_HEADER_BASE] = array_ptr[j][k] & 0xFF;
+                        s_serial_out[(24*j) + (k*3) + RAW_HEADER_BASE + 1] = ((array_ptr[j][k] >> 8) & 0xFF);
+                        s_serial_out[(24*j) + (k*3) + RAW_HEADER_BASE + 2] = ((array_ptr[j][k] >> 24) & 0xFF);
                     }
                 }
                 else
                 {
-                    ESP_LOGI(TAG, "%04u %04u %04u %04u", 
+                    ESP_LOGI(TAG, "%04lu %04lu %04lu %04lu", 
                         array_ptr[j][0], array_ptr[j][1], array_ptr[j][2], array_ptr[j][3]);
                 }
             }

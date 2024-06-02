@@ -895,10 +895,10 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 				}
 				free(s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field);
 			}
-			s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field = malloc(8 * sizeof(uint16_t*));
+			s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field = malloc(8 * sizeof(uint32_t*));
 			for(uint8_t pixel_row = 0; pixel_row < 8; pixel_row++)
 			{
-				s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[pixel_row] = malloc(8 * sizeof(uint16_t));
+				s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[pixel_row] = malloc(8 * sizeof(uint32_t));
 			}
 			s_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size = 8;
 			s_ring_buffer_ptr[s_ring_buffer_iter].vertical_size = 8;
@@ -919,10 +919,10 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 				}
 				free(s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field);
 			}
-			s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field = malloc(4 * sizeof(uint16_t*));
+			s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field = malloc(4 * sizeof(uint32_t*));
 			for(uint8_t pixel_row = 0; pixel_row < 4; pixel_row++)
 			{
-				s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[pixel_row] = malloc(4 * sizeof(uint16_t));
+				s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[pixel_row] = malloc(4 * sizeof(uint32_t));
 			}
 			s_ring_buffer_ptr[s_ring_buffer_iter].horizontal_size = 4;
 			s_ring_buffer_ptr[s_ring_buffer_iter].vertical_size = 4;
@@ -963,8 +963,10 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 					uint8_t h_iter = (k * 4) + (2 * (convert_loop_cnt & 0x01));
 					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter] = s_measurement_buffer[i][0x19 + lin_val];
 					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter] += (s_measurement_buffer[i][0x1A + lin_val] << 8);
+					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter] += (s_measurement_buffer[i][0x18 + lin_val] << 24);
 					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter + 1] = s_measurement_buffer[i][0x34 + lin_val];
 					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter + 1] += (s_measurement_buffer[i][0x35 + lin_val] << 8);
+					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter + 1] += (s_measurement_buffer[i][0x33 + lin_val] << 24);
 				}
 			}
 		}
@@ -991,7 +993,7 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 		s_starting_iter -= MEASUREMENT_BUF_SIZE;
 	}
 
-	//ESP_LOGI(TAG, "starting iter is now: %u, flags are %lx.", s_starting_iter, s_measurement_flags);
+	ESP_LOGI(TAG, "starting iter is now: %u, flags are %lx.", s_starting_iter, s_measurement_flags);
 
 	s_ring_buffer_ptr[s_ring_buffer_iter].is_populated = true;
 	message_info_t depth_array_msg;
