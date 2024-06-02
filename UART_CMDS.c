@@ -209,8 +209,8 @@ static void uart_tof_cmds(uint8_t argc, char** argv)
             }
             case 1:
             {
-                fac_cal_strlen = strlen(tmf8828_fac_cal_1);
-				memcpy(fac_cal_blob_name, tmf8828_fac_cal_1, fac_cal_strlen);
+                fac_cal_strlen = strlen(tmf8828_fac_cal_2);
+				memcpy(fac_cal_blob_name, tmf8828_fac_cal_2, fac_cal_strlen);
 				fac_cal_blob_name[fac_cal_strlen] = '_';
 				fac_cal_blob_name[fac_cal_strlen + 1] = ('0');
 				fac_cal_blob_name[fac_cal_strlen + 2] = '\0';
@@ -218,8 +218,8 @@ static void uart_tof_cmds(uint8_t argc, char** argv)
             }
             case 2:
             {
-                fac_cal_strlen = strlen(tmf8828_fac_cal_1);
-				memcpy(fac_cal_blob_name, tmf8828_fac_cal_1, fac_cal_strlen);
+                fac_cal_strlen = strlen(tmf8828_fac_cal_3);
+				memcpy(fac_cal_blob_name, tmf8828_fac_cal_3, fac_cal_strlen);
 				fac_cal_blob_name[fac_cal_strlen] = '_';
 				fac_cal_blob_name[fac_cal_strlen + 1] = ('0');
 				fac_cal_blob_name[fac_cal_strlen + 2] = '\0';
@@ -227,8 +227,8 @@ static void uart_tof_cmds(uint8_t argc, char** argv)
             }
             case 3:
             {
-                fac_cal_strlen = strlen(tmf8828_fac_cal_1);
-				memcpy(fac_cal_blob_name, tmf8828_fac_cal_1, fac_cal_strlen);
+                fac_cal_strlen = strlen(tmf8828_fac_cal_4);
+				memcpy(fac_cal_blob_name, tmf8828_fac_cal_4, fac_cal_strlen);
 				fac_cal_blob_name[fac_cal_strlen] = '_';
 				fac_cal_blob_name[fac_cal_strlen + 1] = ('0');
 				fac_cal_blob_name[fac_cal_strlen + 2] = '\0';

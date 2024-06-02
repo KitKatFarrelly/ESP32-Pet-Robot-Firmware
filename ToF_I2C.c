@@ -201,7 +201,7 @@ bool TOF_SET_TMF8828_MODE(bool set_tmf8828)
 
 uint8_t TOF_LOAD_CONFIG(uint8_t config)
 {
-	uint8_t write_data[3] = {0, 0, 0};
+	uint8_t write_data[5] = {0, 0, 0, 0, 0};
 	uint8_t read_data[4] = {0, 0, 0, 0};
 	
 	//Steps:
@@ -225,11 +225,27 @@ uint8_t TOF_LOAD_CONFIG(uint8_t config)
 	switch(config)
 	{
 		case 0:
-			//example case where measurement period is set to 100 milliseconds
+			//example case where measurement period is set to 50 milliseconds and kiloiters to 150.
+			write_data[0] = 0x24;
+			write_data[1] = 0x40;
+			write_data[2] = 0x00;
+			write_data[3] = 0x22;
+			write_data[4] = 0x01;
+			if(TOF_WRITE_APP(write_data, 5, 5) != ESP_OK) return 1;
+			write_data[0] = 0x30; //conf_level
+			write_data[1] = 0x20; //d32
+			if(TOF_WRITE_APP(write_data, 2, 5) != ESP_OK) return 1;
+			break;
+
+		case 1:
+			//factory calibration
 			write_data[0] = 0x24;
 			write_data[1] = 0x64;
+			write_data[2] = 0x00;
 			write_data[3] = 0x00;
-			if(TOF_WRITE_APP(write_data, 3, 5) != ESP_OK) return 1;
+			write_data[4] = 0x10;
+			if(TOF_WRITE_APP(write_data, 5, 5) != ESP_OK) return 1;
+			break;
 
 		default:
 			//maybe set a default configuration?
@@ -850,7 +866,7 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 
 	if(ending_iter - s_starting_iter < number_of_measurements)
 	{
-		ESP_LOGE(TAG, "Insufficient measurements to convert buffer.");
+		//ESP_LOGE(TAG, "Insufficient measurements to convert buffer.");
 		return 1;
 	}
 
@@ -942,7 +958,7 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 				for(uint8_t k = 0; k < 2; k++)
 				{
 					//tmf8828 mode works upside down
-					uint8_t lin_val = 3 * ((4 * k) + j);
+					uint8_t lin_val = 3 * (k + (j * 2));
 					uint8_t v_iter = (7 - (j * 2)) - ((convert_loop_cnt & 0x02) / 2);
 					uint8_t h_iter = (k * 4) + (2 * (convert_loop_cnt & 0x01));
 					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter] = s_measurement_buffer[i][0x19 + lin_val];
@@ -975,7 +991,7 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 		s_starting_iter -= MEASUREMENT_BUF_SIZE;
 	}
 
-	ESP_LOGI(TAG, "starting iter is now: %u, flags are %lx.", s_starting_iter, s_measurement_flags);
+	//ESP_LOGI(TAG, "starting iter is now: %u, flags are %lx.", s_starting_iter, s_measurement_flags);
 
 	s_ring_buffer_ptr[s_ring_buffer_iter].is_populated = true;
 	message_info_t depth_array_msg;
