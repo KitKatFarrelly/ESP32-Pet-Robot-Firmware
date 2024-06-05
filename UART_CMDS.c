@@ -1062,14 +1062,14 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
         {
             ESP_LOGI(TAG, "outputting %ux%u depth array:", h_size, v_size);
         }
-        for(uint8_t j = 0; j < v_size; j++)
+        for(uint8_t j = 0; j < h_size; j++)
         {
             if(h_size == 8)
             {
                 if(s_serialize)
                 {
                     //serialize 128 bytes of data
-                    for(uint8_t k = 0; k < v_size; k++)
+                    for(uint8_t k = 0; k < h_size; k++)
                     {
                         s_serial_out[(24*j) + (k*3) + RAW_HEADER_BASE] = array_ptr[j][k] & 0xFF;
                         s_serial_out[(24*j) + (k*3) + RAW_HEADER_BASE + 1] = ((array_ptr[j][k] >> 8) & 0xFF);
