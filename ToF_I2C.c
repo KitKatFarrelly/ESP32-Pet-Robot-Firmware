@@ -962,20 +962,24 @@ static uint8_t TOF_CONVERT_READ_BUFFER_TO_ARRAY(void)
 					uint8_t v_iter = (7 - (j * 2)) - ((convert_loop_cnt & 0x02) / 2);
 					uint8_t h_iter = (k * 4) + (2 * (convert_loop_cnt & 0x01));
 					//First Object
-					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter] = s_measurement_buffer[i][0x19 + lin_val];
-					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter] += (s_measurement_buffer[i][0x1A + lin_val] << 8);
-					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter] += (s_measurement_buffer[i][0x18 + lin_val] << 24);
-					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter + 1] = s_measurement_buffer[i][0x34 + lin_val];
-					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter + 1] += (s_measurement_buffer[i][0x35 + lin_val] << 8);
-					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter + 1] += (s_measurement_buffer[i][0x33 + lin_val] << 24);
+					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter] = 
+						(s_measurement_buffer[i][0x19 + lin_val]) + 
+						(s_measurement_buffer[i][0x1A + lin_val] << 8) + 
+						(s_measurement_buffer[i][0x18 + lin_val] << 24);
+					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter][h_iter + 1] = 
+						(s_measurement_buffer[i][0x34 + lin_val]) + 
+						(s_measurement_buffer[i][0x35 + lin_val] << 8) + 
+						(s_measurement_buffer[i][0x33 + lin_val] << 24);
 
 					//Second Object
-					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter + 8][h_iter] = s_measurement_buffer[i][0x4F + lin_val];
-					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter + 8][h_iter] += (s_measurement_buffer[i][0x50 + lin_val] << 8);
-					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter + 8][h_iter] += (s_measurement_buffer[i][0x4E + lin_val] << 24);
-					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter + 8][h_iter + 1] = s_measurement_buffer[i][0x6A + lin_val];
-					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter + 8][h_iter + 1] += (s_measurement_buffer[i][0x6B + lin_val] << 8);
-					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter + 8][h_iter + 1] += (s_measurement_buffer[i][0x69 + lin_val] << 24);
+					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter + 8][h_iter] = 
+						(s_measurement_buffer[i][0x4F + lin_val]) + 
+						(s_measurement_buffer[i][0x50 + lin_val] << 8) + 
+						(s_measurement_buffer[i][0x4E + lin_val] << 24);
+					s_ring_buffer_ptr[s_ring_buffer_iter].depth_pixel_field[v_iter + 8][h_iter + 1] = 
+						(s_measurement_buffer[i][0x6A + lin_val]) + 
+						(s_measurement_buffer[i][0x6B + lin_val] << 8) + 
+						(s_measurement_buffer[i][0x69 + lin_val] << 24);
 				}
 			}
 		}
