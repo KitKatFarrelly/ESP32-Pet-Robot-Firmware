@@ -5,13 +5,23 @@
 #include "FLASH_SPI.h"
 
 #define MAX_FEATURES_PER_TOF_ARRAY 10
-#define MAX_GRADIENT_DIFF_FOR_FEATURE 5
-#define MAX_GRADIENT_MAP_SIZE 8
+#define MAX_GRADIENT_DIFF_FOR_FEATURE 50
+#define MAX_s_gradient_map_SIZE 8
 
 typedef struct
 {
-    NAV_POINT_T features[MAX_FEATURES_PER_TOF_ARRAY];
-    uint8_t number_of_nodes_in_feature[MAX_FEATURES_PER_TOF_ARRAY];
+    uint8_t number_of_nodes_in_feature;
+    uint8_t min_x;
+    uint8_t max_x;
+    uint8_t min_y;
+    uint8_t max_y;
+    uint16_t average_angle;
+    uint16_t average_distance;
+} dfs_feature_details_t;
+
+typedef struct
+{
+    dfs_feature_details_t node_details[MAX_FEATURES_PER_TOF_ARRAY];
     uint8_t number_of_features;
 } feature_extraction_t;
 
@@ -32,7 +42,7 @@ typedef struct
 
 typedef struct
 {
-    gradient_graph_point_t graph_points[MAX_GRADIENT_MAP_SIZE][MAX_GRADIENT_MAP_SIZE]; //use max size for gradient map
+    gradient_graph_point_t graph_points[MAX_s_gradient_map_SIZE][MAX_s_gradient_map_SIZE]; //use max size for gradient map
 } gradient_map_t;
 
 
@@ -42,7 +52,7 @@ static robot_position_t s_nav_robot_position;
 static NAV_MAP_T s_nav_map;
 static bool s_is_navigation_enabled = false;
 
-static gradient_map_t gradient_map = {0};
+static gradient_map_t s_gradient_map = {0};
 
 static const char *TAG = "NAV_ALG";
 
@@ -150,10 +160,80 @@ static uint8_t nav_algo_convert_adjusted_confidence_value(uint16_t distance, uin
     return (uint8_t) (ret_val & 0xFF);
 }
 
-//create a new feature via dfs
-static uint8_t nav_algo_create_new_feature_with_dfs(uint8_t v_iter, uint8_t h_iter, NAV_POINT_T *new_feature)
+static dfs_feature_details_t nav_algo_converge_details(dfs_feature_details_t first_det, dfs_feature_details_t second_det)
 {
+    dfs_feature_details_t return_details;
+    return_details.number_of_nodes_in_feature = first_det.number_of_nodes_in_feature + second_det.number_of_nodes_in_feature;
+    return_details.min_x = (first_det.min_x < second_det.min_x) ? first_det.min_x : second_det.min_x;
+    return_details.max_x = (first_det.max_x < second_det.max_x) ? first_det.max_x : second_det.max_x;
+    return_details.min_y = (first_det.min_y < second_det.min_y) ? first_det.min_y : second_det.min_y;
+    return_details.max_y = (first_det.max_y < second_det.max_y) ? first_det.max_y : second_det.max_y;
+    return_details.average_angle = (first_det.average_angle * first_det.number_of_nodes_in_feature) + (second_det.average_angle * second_det.number_of_nodes_in_feature)
+    return_details.average_angle = return_details.average_angle / number_of_nodes_in_feature;
+    return_details.average_distance = (first_det.average_distance * first_det.number_of_nodes_in_feature) + (second_det.average_distance * second_det.number_of_nodes_in_feature)
+    return_details.average_distance = return_details.average_distance / number_of_nodes_in_feature;
+    return return_details;
+}
 
+//create a new feature via dfs
+static dfs_feature_details_t nav_algo_create_new_feature_with_dfs(uint8_t v_iter, uint8_t h_iter, TOF_DATA_t* tof_data)
+{
+    //dfs in each possible direction, then collect data and return to main
+    uint16_t angle = (h_iter < tof_data->horizontal_size - 1) ? s_gradient_map.graph_points[v_iter][h_iter].h_diff : s_gradient_map.graph_points[v_iter][h_iter - 1].h_diff;
+    //need to calculate z distance per cell using tan, then calculate slope.
+    //from there, use arctan to calculate angle.
+    dfs_feature_details_t node_details = 
+    {
+        .number_of_nodes_in_feature = 1,
+        .min_x = h_iter,
+        .max_x = h_iter,
+        .min_y = h_iter,
+        .max_y = h_iter,
+        .average_angle = angle,
+        .average_distance = tof_data->depth_pixel_field[v_iter][h_iter],
+    };
+    s_gradient_map.graph_points[v_iter][h_iter].visited = true;
+    if(v_iter > 0 && !s_gradient_map.graph_points[v_iter - 1][h_iter].visited)
+    {
+        uint16_t up_diff = s_gradient_map.graph_points[v_iter][h_iter].v_diff - s_gradient_map.graph_points[v_iter - 1][h_iter].v_diff
+        if(up_diff > 0x8000) up_diff = (up_diff ^ 0xFFFF) + 1; //invert if negative
+        if(up_diff < MAX_GRADIENT_DIFF_FOR_FEATURE || s_gradient_map.graph_points[v_iter - 1][h_iter].v_diff < MAX_GRADIENT_DIFF_FOR_FEATURE)
+        {
+            dfs_feature_details_t up_details = nav_algo_create_new_feature_with_dfs(v_iter - 1, h_iter, tof_data);
+            node_details = nav_algo_converge_details(node_details, up_details);
+        }
+    }
+    if(v_iter < tof_data->horizontal_size - 1 && !s_gradient_map.graph_points[v_iter + 1][h_iter].visited)
+    {
+        uint16_t down_diff = s_gradient_map.graph_points[v_iter][h_iter].v_diff - s_gradient_map.graph_points[v_iter + 1][h_iter].v_diff
+        if(down_diff > 0x8000) down_diff = (down_diff ^ 0xFFFF) + 1; //invert if negative
+        if(down_diff < MAX_GRADIENT_DIFF_FOR_FEATURE || s_gradient_map.graph_points[v_iter][h_iter].v_diff < MAX_GRADIENT_DIFF_FOR_FEATURE)
+        {
+            dfs_feature_details_t down_details = nav_algo_create_new_feature_with_dfs(v_iter + 1, h_iter, tof_data);
+            node_details = nav_algo_converge_details(node_details, down_details);
+        }
+    }
+    if(h_iter > 0 && !s_gradient_map.graph_points[v_iter][h_iter - 1].visited)
+    {
+        uint16_t left_diff = s_gradient_map.graph_points[v_iter][h_iter].h_diff - s_gradient_map.graph_points[v_iter][h_iter - 1].h_diff
+        if(left_diff > 0x8000) left_diff = (left_diff ^ 0xFFFF) + 1; //invert if negative
+        if(left_diff < MAX_GRADIENT_DIFF_FOR_FEATURE || s_gradient_map.graph_points[v_iter][h_iter - 1].h_diff < MAX_GRADIENT_DIFF_FOR_FEATURE)
+        {
+            dfs_feature_details_t left_details = nav_algo_create_new_feature_with_dfs(v_iter, h_iter - 1, tof_data);
+            node_details = nav_algo_converge_details(node_details, left_details);
+        }
+    }
+    if(h_iter < tof_data->horizontal_size - 1 && !s_gradient_map.graph_points[v_iter][h_iter + 1].visited)
+    {
+        uint16_t right_diff = s_gradient_map.graph_points[v_iter][h_iter].h_diff - s_gradient_map.graph_points[v_iter][h_iter + 1].h_diff
+        if(right_diff > 0x8000) right_diff = (right_diff ^ 0xFFFF) + 1; //invert if negative
+        if(right_diff < MAX_GRADIENT_DIFF_FOR_FEATURE || s_gradient_map.graph_points[v_iter][h_iter].h_diff < MAX_GRADIENT_DIFF_FOR_FEATURE)
+        {
+            dfs_feature_details_t right_details = nav_algo_create_new_feature_with_dfs(v_iter, h_iter + 1, tof_data);
+            node_details = nav_algo_converge_details(node_details, right_details);
+        }
+    }
+    return node_details;
 }
 
 //perform feature extraction from tof data
@@ -164,14 +244,20 @@ static feature_extraction_t nav_algo_feature_extraction_from_tof_data(TOF_DATA_t
     return_features_list.number_of_features = 0;
     //as all features are considered to be planes in this design, features are extracted like so:
     //1. create a 2x2 convolution of each point to determine vertical and horizontal gradient, starting from top left
-    for(uint8_t v_iter = 0; v_iter < tof_data->horizontal_size - 1; v_iter++)
+    for(uint8_t v_iter = 0; v_iter < tof_data->horizontal_size; v_iter++)
     {
-        for(uint8_t h_iter = 0; h_iter < tof_data->horizontal_size - 1; h_iter++)
+        for(uint8_t h_iter = 0; h_iter < tof_data->horizontal_size; h_iter++)
         {
             //negative values are just very high numbers for unsigned integers, which is fine in this case
-            gradient_map.graph_points[v_iter][h_iter].v_diff = (tof_data->depth_pixel_field[v_iter][h_iter] & 0xFFFF) - (tof_data->depth_pixel_field[v_iter + 1][h_iter] & 0xFFFF);
-            gradient_map.graph_points[v_iter][h_iter].h_diff = (tof_data->depth_pixel_field[v_iter][h_iter] & 0xFFFF) - (tof_data->depth_pixel_field[v_iter][h_iter + 1] & 0xFFFF);
-            gradient_map.graph_points[v_iter][h_iter].visited = false;
+            if(v_iter < tof_data->horizontal_size - 1)
+            {
+                s_gradient_map.graph_points[v_iter][h_iter].v_diff = (tof_data->depth_pixel_field[v_iter][h_iter] & 0xFFFF) - (tof_data->depth_pixel_field[v_iter + 1][h_iter] & 0xFFFF);
+            }
+            if(h_iter < tof_data->horizontal_size - 1)
+            {
+                s_gradient_map.graph_points[v_iter][h_iter].h_diff = (tof_data->depth_pixel_field[v_iter][h_iter] & 0xFFFF) - (tof_data->depth_pixel_field[v_iter][h_iter + 1] & 0xFFFF);
+            }
+            s_gradient_map.graph_points[v_iter][h_iter].visited = false;
         }
     }
     //2. dfs to find islands of features within the convolution with similar gradients.
@@ -180,33 +266,31 @@ static feature_extraction_t nav_algo_feature_extraction_from_tof_data(TOF_DATA_t
         for(uint8_t h_iter = 0; h_iter < tof_data->horizontal_size - 1; h_iter++)
         {
             
-            if(!gradient_map.graph_points[v_iter][h_iter].visited)
+            if(!s_gradient_map.graph_points[v_iter][h_iter].visited)
             {
                 //create new feature via dfs
-                NAV_POINT_T new_feature;
-                uint8_t number_of_nodes_in_feature = nav_algo_create_new_feature_with_dfs(v_iter, h_iter, &new_feature);
+                dfs_feature_details_t new_node = nav_algo_create_new_feature_with_dfs(v_iter, h_iter, tof_data);
                 if(return_features_list.number_of_features < MAX_FEATURES_PER_TOF_ARRAY)
                 {
                     //add new node 
-                    return_features_list.features[return_features_list.number_of_features] = new_feature;
-                    return_features_list.number_of_nodes_in_feature[return_features_list.number_of_features] = number_of_nodes_in_feature;
+                    return_features_list.node_details[return_features_list.number_of_features] = new_node;
                     return_features_list.number_of_features++;
                 }
                 else
                 {
                     //if new feature is larger than the smallest current feature then replace feature on list
                     uint8_t min_feature = 0;
+                    //this can be done more efficiently...
                     for(uint8_t list_iter = 0; list_iter < return_features_list.number_of_features; list_iter++)
                     {
-                        if(return_features_list.number_of_nodes_in_feature[list_iter] < return_features_list.number_of_nodes_in_feature[min_feature])
+                        if(return_features_list.node_details[list_iter].number_of_nodes_in_feature < return_features_list.node_details[min_feature].number_of_nodes_in_feature)
                         {
                             min_feature = list_iter;
                         }
                     }
-                    if(number_of_nodes_in_feature > return_features_list.number_of_nodes_in_feature[min_feature])
+                    if(mew_node.number_of_nodes_in_feature > return_features_list.node_details[min_feature].number_of_nodes_in_feature)
                     {
-                        return_features_list.features[min_feature] = new_feature;
-                        return_features_list.number_of_nodes_in_feature[min_feature] = number_of_nodes_in_feature;
+                        return_features_list.node_details[min_feature].number_of_nodes_in_feature = mew_node.number_of_nodes_in_feature;
                     }
                 }
                 
@@ -218,15 +302,21 @@ static feature_extraction_t nav_algo_feature_extraction_from_tof_data(TOF_DATA_t
     return return_features_list;
 }
 
+static NAV_POINT_T nav_algo_convert_node_details_to_landmark(dfs_feature_details_t details)
+{
+    NAV_POINT_T return_point;
+    return return_point;
+}
+
 //read tof map and run error vs existing map to estimate movement
 //also create and adjust objects on each submap
 static void nav_algo_check_tof_array_against_map(TOF_DATA_t* tof_data)
 {
     //step 1: generate landmarks
-    feature_extraction_t feaures_list = nav_algo_feature_extraction_from_tof_data(tof_data);
+    feature_extraction_t features_list = nav_algo_feature_extraction_from_tof_data(tof_data);
 
     //step 2: find 2 most confident landmarks
-    if(!features_list.number_of_feaures)
+    if(!features_list.number_of_features)
     {
         //no features were extracted from the array.
         return;
