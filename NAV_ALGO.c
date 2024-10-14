@@ -1,3 +1,5 @@
+#include <math.h>
+
 #include "NAV_ALGO.h"
 #include "MESSAGE_QUEUE.h"
 #include "ToF_I2C.h"
@@ -6,7 +8,11 @@
 
 #define MAX_FEATURES_PER_TOF_ARRAY 10
 #define MAX_GRADIENT_DIFF_FOR_FEATURE 50
-#define MAX_s_gradient_map_SIZE 8
+#define MAX_GRADIENT_MAP_SIZE 8
+#define DEGREES_PER_TOF_PIXEL 5.0
+#define OFFSET_AT_MIDDLE_POSITION 2.5
+#define RAD_TO_DEGREES 57.29578
+#define DEGREES_TO_RAD 0.0174532925
 
 typedef struct
 {
@@ -15,7 +21,7 @@ typedef struct
     uint8_t max_x;
     uint8_t min_y;
     uint8_t max_y;
-    uint16_t average_angle;
+    int16_t average_angle;
     uint16_t average_distance;
 } dfs_feature_details_t;
 
@@ -34,15 +40,15 @@ typedef struct
 
 typedef struct
 {
-    uint16_t v_diff;
-    uint16_t h_diff;
+    int16_t v_diff;
+    int16_t h_diff;
     bool visited;
 } gradient_graph_point_t;
 
 
 typedef struct
 {
-    gradient_graph_point_t graph_points[MAX_s_gradient_map_SIZE][MAX_s_gradient_map_SIZE]; //use max size for gradient map
+    gradient_graph_point_t graph_points[MAX_GRADIENT_MAP_SIZE][MAX_GRADIENT_MAP_SIZE]; //use max size for gradient map
 } gradient_map_t;
 
 
@@ -179,24 +185,27 @@ static dfs_feature_details_t nav_algo_converge_details(dfs_feature_details_t fir
 static dfs_feature_details_t nav_algo_create_new_feature_with_dfs(uint8_t v_iter, uint8_t h_iter, TOF_DATA_t* tof_data)
 {
     //dfs in each possible direction, then collect data and return to main
-    uint16_t angle = (h_iter < tof_data->horizontal_size - 1) ? s_gradient_map.graph_points[v_iter][h_iter].h_diff : s_gradient_map.graph_points[v_iter][h_iter - 1].h_diff;
-    //need to calculate z distance per cell using tan, then calculate slope.
+    double current_diff = (double) (h_iter < tof_data->horizontal_size - 1) ? s_gradient_map.graph_points[v_iter][h_iter].h_diff : s_gradient_map.graph_points[v_iter][h_iter - 1].h_diff;
+    double current_pixel_diff = (((double) (h_iter) - 4.0) * DEGREES_PER_TOF_PIXEL) + OFFSET_AT_MIDDLE_POSITION;
+    //need to calculate z distance per cell using sin, then calculate slope.
+    double current_run = ((double) tof_data->depth_pixel_field[v_iter][h_iter]) * sin(DEGREES_TO_RAD * current_pixel_diff);
     //from there, use arctan to calculate angle.
+    double angle = RAD_TO_DEGREES * atan2(current_diff, current_run);
     dfs_feature_details_t node_details = 
     {
         .number_of_nodes_in_feature = 1,
         .min_x = h_iter,
         .max_x = h_iter,
-        .min_y = h_iter,
-        .max_y = h_iter,
-        .average_angle = angle,
+        .min_y = v_iter,
+        .max_y = v_iter,
+        .average_angle = (int16_t) angle,
         .average_distance = tof_data->depth_pixel_field[v_iter][h_iter],
     };
     s_gradient_map.graph_points[v_iter][h_iter].visited = true;
     if(v_iter > 0 && !s_gradient_map.graph_points[v_iter - 1][h_iter].visited)
     {
         uint16_t up_diff = s_gradient_map.graph_points[v_iter][h_iter].v_diff - s_gradient_map.graph_points[v_iter - 1][h_iter].v_diff
-        if(up_diff > 0x8000) up_diff = (up_diff ^ 0xFFFF) + 1; //invert if negative
+        if(up_diff < 0) up_diff = -up_diff; //invert if negative
         if(up_diff < MAX_GRADIENT_DIFF_FOR_FEATURE || s_gradient_map.graph_points[v_iter - 1][h_iter].v_diff < MAX_GRADIENT_DIFF_FOR_FEATURE)
         {
             dfs_feature_details_t up_details = nav_algo_create_new_feature_with_dfs(v_iter - 1, h_iter, tof_data);
@@ -206,7 +215,7 @@ static dfs_feature_details_t nav_algo_create_new_feature_with_dfs(uint8_t v_iter
     if(v_iter < tof_data->horizontal_size - 1 && !s_gradient_map.graph_points[v_iter + 1][h_iter].visited)
     {
         uint16_t down_diff = s_gradient_map.graph_points[v_iter][h_iter].v_diff - s_gradient_map.graph_points[v_iter + 1][h_iter].v_diff
-        if(down_diff > 0x8000) down_diff = (down_diff ^ 0xFFFF) + 1; //invert if negative
+        if(down_diff < 0) down_diff = -down_diff; //invert if negative
         if(down_diff < MAX_GRADIENT_DIFF_FOR_FEATURE || s_gradient_map.graph_points[v_iter][h_iter].v_diff < MAX_GRADIENT_DIFF_FOR_FEATURE)
         {
             dfs_feature_details_t down_details = nav_algo_create_new_feature_with_dfs(v_iter + 1, h_iter, tof_data);
@@ -216,7 +225,7 @@ static dfs_feature_details_t nav_algo_create_new_feature_with_dfs(uint8_t v_iter
     if(h_iter > 0 && !s_gradient_map.graph_points[v_iter][h_iter - 1].visited)
     {
         uint16_t left_diff = s_gradient_map.graph_points[v_iter][h_iter].h_diff - s_gradient_map.graph_points[v_iter][h_iter - 1].h_diff
-        if(left_diff > 0x8000) left_diff = (left_diff ^ 0xFFFF) + 1; //invert if negative
+        if(left_diff < 0) left_diff = -left_diff; //invert if negative
         if(left_diff < MAX_GRADIENT_DIFF_FOR_FEATURE || s_gradient_map.graph_points[v_iter][h_iter - 1].h_diff < MAX_GRADIENT_DIFF_FOR_FEATURE)
         {
             dfs_feature_details_t left_details = nav_algo_create_new_feature_with_dfs(v_iter, h_iter - 1, tof_data);
@@ -226,7 +235,7 @@ static dfs_feature_details_t nav_algo_create_new_feature_with_dfs(uint8_t v_iter
     if(h_iter < tof_data->horizontal_size - 1 && !s_gradient_map.graph_points[v_iter][h_iter + 1].visited)
     {
         uint16_t right_diff = s_gradient_map.graph_points[v_iter][h_iter].h_diff - s_gradient_map.graph_points[v_iter][h_iter + 1].h_diff
-        if(right_diff > 0x8000) right_diff = (right_diff ^ 0xFFFF) + 1; //invert if negative
+        if(right_diff < 0) right_diff = -right_diff; //invert if negative
         if(right_diff < MAX_GRADIENT_DIFF_FOR_FEATURE || s_gradient_map.graph_points[v_iter][h_iter].h_diff < MAX_GRADIENT_DIFF_FOR_FEATURE)
         {
             dfs_feature_details_t right_details = nav_algo_create_new_feature_with_dfs(v_iter, h_iter + 1, tof_data);
@@ -283,7 +292,9 @@ static feature_extraction_t nav_algo_feature_extraction_from_tof_data(TOF_DATA_t
                     //this can be done more efficiently...
                     for(uint8_t list_iter = 0; list_iter < return_features_list.number_of_features; list_iter++)
                     {
-                        if(return_features_list.node_details[list_iter].number_of_nodes_in_feature < return_features_list.node_details[min_feature].number_of_nodes_in_feature)
+                        if(return_features_list.node_details[list_iter].number_of_nodes_in_feature < return_features_list.node_details[min_feature].number_of_nodes_in_feature ||
+                        ((return_features_list.node_details[list_iter].number_of_nodes_in_feature == return_features_list.node_details[min_feature].number_of_nodes_in_feature) && 
+                        (return_features_list.node_details[list_iter].average_distance < return_features_list.node_details[min_feature].average_distance)))
                         {
                             min_feature = list_iter;
                         }
