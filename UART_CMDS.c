@@ -18,6 +18,7 @@
 #include "IMU_SPI.h"
 #include "MESSAGE_QUEUE.h"
 #include "MTR_DRVR.h"
+#include "NAV_ALGO.h"
 
 #define UART_MAX_ARGS 10
 #define UART_INVALID_CHARACTER 100
@@ -30,10 +31,10 @@ static const char *TAG = "USB_UART";
 static component_handle_t s_uart_component_handle = 0;
 static bool s_has_component_handle = false;
 static bool s_serialize = false;
+static bool s_gen_features = false;
 static callback_handle_t UART_callback_handles[dispatcher_max] = {0};
 static callback_handle_t s_ToF_callback_handle;
 static callback_handle_t s_imu_callback_handle;
-static uint8_t s_serial_out[UART_SERIAL_MAX] = {0};
 
 // helper functions
 
@@ -54,12 +55,15 @@ static bool uart_does_component_have_a_handle(dispatcher_type_t dispatcher);
 
 // uart command lists
 
+//These seriously need to be split up into separate files...
+
 static void uart_tof_cmds(uint8_t argc, char** argv);
 static void uart_flash_cmds(uint8_t argc, char** argv);
 static void uart_msg_queue_cmds(uint8_t argc, char** argv);
 static void uart_imu_cmds(uint8_t argc, char** argv);
 static void uart_mtr_cmds(uint8_t argc, char** argv);
 static void uart_serial_cmds(uint8_t argc, char** argv);
+static void uart_nav_cmds(uint8_t argc, char** argv);
 
 // function defs
 
@@ -905,6 +909,27 @@ static void uart_serial_cmds(uint8_t argc, char** argv)
     }
 }
 
+static void uart_nav_cmds(uint8_t argc, char** argv)
+{
+    if(argv < 3)
+    {
+        ESP_LOGE(TAG, "incorrect number of args");
+        return;
+    }
+    if(strcmp((char*) argv[1], (const char*) "set_generate_features") == 0)
+    {
+        if(strcmp((char*) argv[2], (const char*) "true") == 0)
+        {
+            s_gen_features = true;
+        }
+        else if(strcmp((char*) argv[2], (const char*) "false") == 0)
+        {
+            s_gen_features = false; 
+        }
+        ESP_LOGI(TAG, "serial value set to %d", s_gen_features);
+    }
+}
+
 static uint8_t uart_convert_str_to_handedness(char * cmd_buf)
 {
     if(strcmp(cmd_buf, (const char*) "right"))
@@ -1024,12 +1049,13 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
 {
     dispatcher_type_t dispatcher = uart_get_dispatcher_from_component(component_type);
     uint8_t checksum = 0;
-    s_serial_out[0] = 0xFE;
-    s_serial_out[1] = 'i';
-    s_serial_out[2] = 'n';
-    s_serial_out[3] = 'v';
-    s_serial_out[4] = 0; //invalid size
-    s_serial_out[5] = 0; //invalid type
+    uint8_t serial_out[UART_SERIAL_MAX] = {0};
+    serial_out[0] = 0xFE;
+    serial_out[1] = 'i';
+    serial_out[2] = 'n';
+    serial_out[3] = 'v';
+    serial_out[4] = 0; //invalid size
+    serial_out[5] = 0; //invalid type
     if(!s_serialize)
     {
         ESP_LOGI(TAG, "message from %s with message type %u and size %u.", uart_return_string_from_dispatcher(dispatcher), message_type, message_size);
@@ -1043,20 +1069,20 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
         uint32_t** array_ptr = tof_data->depth_pixel_field;
         if(s_serialize)
         {
-            //write header data to s_serial_out
-            s_serial_out[0] = 0xFE;
-            s_serial_out[1] = 'r';
-            s_serial_out[2] = 'a';
-            s_serial_out[3] = 'w';
+            //write header data to serial_out
+            serial_out[0] = 0xFE;
+            serial_out[1] = 'r';
+            serial_out[2] = 'a';
+            serial_out[3] = 'w';
             if(h_size == 8)
             {
-                s_serial_out[4] = 192; //128 bytes of data
+                serial_out[4] = 192; //128 bytes of data
             }
             else
             {
-                s_serial_out[4] = 48; //32 bytes of data
+                serial_out[4] = 48; //32 bytes of data
             }
-            s_serial_out[5] = 4; //data type is ToF
+            serial_out[5] = 4; //data type is ToF
         }
         else
         {
@@ -1071,9 +1097,9 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
                     //serialize 128 bytes of data
                     for(uint8_t k = 0; k < h_size; k++)
                     {
-                        s_serial_out[(24*j) + (k*3) + RAW_HEADER_BASE] = array_ptr[j][k] & 0xFF;
-                        s_serial_out[(24*j) + (k*3) + RAW_HEADER_BASE + 1] = ((array_ptr[j][k] >> 8) & 0xFF);
-                        s_serial_out[(24*j) + (k*3) + RAW_HEADER_BASE + 2] = ((array_ptr[j][k] >> 24) & 0xFF);
+                        serial_out[(24*j) + (k*3) + RAW_HEADER_BASE] = array_ptr[j][k] & 0xFF;
+                        serial_out[(24*j) + (k*3) + RAW_HEADER_BASE + 1] = ((array_ptr[j][k] >> 8) & 0xFF);
+                        serial_out[(24*j) + (k*3) + RAW_HEADER_BASE + 2] = ((array_ptr[j][k] >> 24) & 0xFF);
                     }
                 }
                 else
@@ -1090,9 +1116,9 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
                     //serialize 32 bytes of data
                     for(uint8_t k = 0; k < v_size; k++)
                     {
-                        s_serial_out[(24*j) + (k*3) + RAW_HEADER_BASE] = array_ptr[j][k] & 0xFF;
-                        s_serial_out[(24*j) + (k*3) + RAW_HEADER_BASE + 1] = ((array_ptr[j][k] >> 8) & 0xFF);
-                        s_serial_out[(24*j) + (k*3) + RAW_HEADER_BASE + 2] = ((array_ptr[j][k] >> 24) & 0xFF);
+                        serial_out[(24*j) + (k*3) + RAW_HEADER_BASE] = array_ptr[j][k] & 0xFF;
+                        serial_out[(24*j) + (k*3) + RAW_HEADER_BASE + 1] = ((array_ptr[j][k] >> 8) & 0xFF);
+                        serial_out[(24*j) + (k*3) + RAW_HEADER_BASE + 2] = ((array_ptr[j][k] >> 24) & 0xFF);
                     }
                 }
                 else
@@ -1110,35 +1136,35 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
         uint32_t timestamp = (imu_data->timestamp[2] << 16) + (imu_data->timestamp[1] << 8) + imu_data->timestamp[0];
         if(s_serialize)
         {
-            //write header data to s_serial_out
-            s_serial_out[0] = 0xFE;
-            s_serial_out[1] = 'r';
-            s_serial_out[2] = 'a';
-            s_serial_out[3] = 'w';
-            s_serial_out[4] = 3;
-            s_serial_out[5] = imu_data->flags; //data type is acc (1), gyro (2), or both (3)
-            s_serial_out[RAW_HEADER_BASE] = imu_data->timestamp[0];
-            s_serial_out[RAW_HEADER_BASE + 1] = imu_data->timestamp[1];
-            s_serial_out[RAW_HEADER_BASE + 2] = imu_data->timestamp[2];
+            //write header data to serial_out
+            serial_out[0] = 0xFE;
+            serial_out[1] = 'r';
+            serial_out[2] = 'a';
+            serial_out[3] = 'w';
+            serial_out[4] = 3;
+            serial_out[5] = imu_data->flags; //data type is acc (1), gyro (2), or both (3)
+            serial_out[RAW_HEADER_BASE] = imu_data->timestamp[0];
+            serial_out[RAW_HEADER_BASE + 1] = imu_data->timestamp[1];
+            serial_out[RAW_HEADER_BASE + 2] = imu_data->timestamp[2];
             if(imu_data->flags & 0x01)
             {
-                s_serial_out[RAW_HEADER_BASE + s_serial_out[4]] = imu_data->acc_data[0];
-                s_serial_out[RAW_HEADER_BASE + 1 + s_serial_out[4]] = imu_data->acc_data[1];
-                s_serial_out[RAW_HEADER_BASE + 2 + s_serial_out[4]] = imu_data->acc_data[2];
-                s_serial_out[RAW_HEADER_BASE + 3 + s_serial_out[4]] = imu_data->acc_data[3];
-                s_serial_out[RAW_HEADER_BASE + 4 + s_serial_out[4]] = imu_data->acc_data[4];
-                s_serial_out[RAW_HEADER_BASE + 5 + s_serial_out[4]] = imu_data->acc_data[5];
-                s_serial_out[4] += 6;
+                serial_out[RAW_HEADER_BASE + serial_out[4]] = imu_data->acc_data[0];
+                serial_out[RAW_HEADER_BASE + 1 + serial_out[4]] = imu_data->acc_data[1];
+                serial_out[RAW_HEADER_BASE + 2 + serial_out[4]] = imu_data->acc_data[2];
+                serial_out[RAW_HEADER_BASE + 3 + serial_out[4]] = imu_data->acc_data[3];
+                serial_out[RAW_HEADER_BASE + 4 + serial_out[4]] = imu_data->acc_data[4];
+                serial_out[RAW_HEADER_BASE + 5 + serial_out[4]] = imu_data->acc_data[5];
+                serial_out[4] += 6;
             }
             if(imu_data->flags & 0x02)
             {
-                s_serial_out[RAW_HEADER_BASE + s_serial_out[4]] = imu_data->gyr_data[0];
-                s_serial_out[RAW_HEADER_BASE + 1 + s_serial_out[4]] = imu_data->gyr_data[1];
-                s_serial_out[RAW_HEADER_BASE + 2 + s_serial_out[4]] = imu_data->gyr_data[2];
-                s_serial_out[RAW_HEADER_BASE + 3 + s_serial_out[4]] = imu_data->gyr_data[3];
-                s_serial_out[RAW_HEADER_BASE + 4 + s_serial_out[4]] = imu_data->gyr_data[4];
-                s_serial_out[RAW_HEADER_BASE + 5 + s_serial_out[4]] = imu_data->gyr_data[5];
-                s_serial_out[4] += 6;
+                serial_out[RAW_HEADER_BASE + serial_out[4]] = imu_data->gyr_data[0];
+                serial_out[RAW_HEADER_BASE + 1 + serial_out[4]] = imu_data->gyr_data[1];
+                serial_out[RAW_HEADER_BASE + 2 + serial_out[4]] = imu_data->gyr_data[2];
+                serial_out[RAW_HEADER_BASE + 3 + serial_out[4]] = imu_data->gyr_data[3];
+                serial_out[RAW_HEADER_BASE + 4 + serial_out[4]] = imu_data->gyr_data[4];
+                serial_out[RAW_HEADER_BASE + 5 + serial_out[4]] = imu_data->gyr_data[5];
+                serial_out[4] += 6;
             }
         }
         else
@@ -1150,6 +1176,18 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
                 uint16_t raw_gyro = (imu_data->gyr_data[(2*i) + 1] << 8) + imu_data->gyr_data[(2*i)];
                 ESP_LOGI(TAG, "%u: accel %04x, gyro %04x", i, raw_accel, raw_gyro);
             }
+        }
+    }
+    else if(component_type == nav_algo_public_component)
+    {
+        switch(message_type)
+        {
+            case NAV_RAW_FEATURE_DATA:
+                break;
+            case NAV_TRANSFORM_DATA:
+                break;
+            case NAV_MAP_DATA:
+                break;
         }
     }
     else
@@ -1165,14 +1203,14 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
     }
     if(s_serialize)
     {
-        for(uint8_t check_size = 0; check_size < (s_serial_out[4] + RAW_HEADER_BASE); check_size++)
+        for(uint8_t check_size = 0; check_size < (serial_out[4] + RAW_HEADER_BASE); check_size++)
         {
-            checksum = checksum ^ s_serial_out[check_size];
+            checksum = checksum ^ serial_out[check_size];
         }
-        s_serial_out[RAW_HEADER_BASE + s_serial_out[4]] = checksum; //checksum
-        s_serial_out[RAW_HEADER_BASE + 1 + s_serial_out[4]] = 0;
+        serial_out[RAW_HEADER_BASE + serial_out[4]] = checksum; //checksum
+        serial_out[RAW_HEADER_BASE + 1 + serial_out[4]] = 0;
         //write data out via UART
-        fwrite(s_serial_out, sizeof(uint8_t), RAW_HEADER_BASE + s_serial_out[4] + 2, stdout);
+        fwrite(serial_out, sizeof(uint8_t), RAW_HEADER_BASE + serial_out[4] + 2, stdout);
     }
 }
 

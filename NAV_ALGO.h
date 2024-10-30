@@ -6,6 +6,16 @@
 
 #define MAX_SUBMAPS_PER_DIRECTION 10
 
+extern component_handle_t nav_algo_public_component;
+
+typedef enum
+{
+    NAV_RAW_FEATURE_DATA,
+    NAV_TRANSFORM_DATA,
+    NAV_MAP_DATA,
+    NAV_MSG_MAX,
+} IMU_MESSAGE_TYPES_t;
+
 typedef uint32_t NAV_MAP_HANDLER_T;
 
 //nav_point_t consists of 4 fields position, size, rotation, confidence
@@ -15,7 +25,8 @@ typedef struct
     //10 bits per x, y, z. Should be millimeter accuracy
     uint32_t xyz_pos;
     //8 bits per width, height. 0 in height field means infinite height
-    uint16_t width_height_size;
+    uint8_t width;
+    uint8_t height;
     //8 bits for angle, about 1.4 degrees per bit
     uint8_t rotation;
     //adjusted confidence value based on depth data
@@ -42,6 +53,24 @@ typedef struct
     uint16_t cur_z;
     uint16_t cur_rotation;
 } NAV_CURRENT_POS_T;
+
+typedef struct
+{
+    uint8_t number_of_nodes_in_feature;
+    uint8_t min_x;
+    uint8_t max_x;
+    uint8_t min_y;
+    uint8_t max_y;
+    int16_t average_angle;
+    uint16_t average_distance;
+    uint16_t average_confidence;
+} dfs_feature_details_t;
+
+typedef struct
+{
+    dfs_feature_details_t node_details[MAX_FEATURES_PER_TOF_ARRAY];
+    uint8_t number_of_features;
+} feature_extraction_t;
 
 bool nav_algo_init(void);
 

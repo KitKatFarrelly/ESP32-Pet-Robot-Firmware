@@ -13,23 +13,8 @@
 #define OFFSET_AT_MIDDLE_POSITION 2.5
 #define RAD_TO_DEGREES 57.29578
 #define DEGREES_TO_RAD 0.0174532925
+#define DEGREES_TO_UINT8_T_ANGLE 0.7142857
 
-typedef struct
-{
-    uint8_t number_of_nodes_in_feature;
-    uint8_t min_x;
-    uint8_t max_x;
-    uint8_t min_y;
-    uint8_t max_y;
-    int16_t average_angle;
-    uint16_t average_distance;
-} dfs_feature_details_t;
-
-typedef struct
-{
-    dfs_feature_details_t node_details[MAX_FEATURES_PER_TOF_ARRAY];
-    uint8_t number_of_features;
-} feature_extraction_t;
 
 typedef struct
 {
@@ -62,6 +47,9 @@ static gradient_map_t s_gradient_map = {0};
 
 static const char *TAG = "NAV_ALG";
 
+// Externs
+component_handle_t nav_algo_public_component = 0;
+
 static void nav_algo_queue_handler(component_handle_t component_type, uint8_t message_type, void* message_data, size_t message_size);
 static uint8_t nav_algo_convert_adjusted_confidence_value(uint16_t distance, uint8_t confidence);
 //placeholder for imu kalman filter function
@@ -71,6 +59,10 @@ bool nav_algo_init(void)
 {
     s_nav_tof_handle = register_priority_handler_for_messages(nav_algo_queue_handler, ToF_public_component);
     s_nav_imu_handle = register_priority_handler_for_messages(nav_algo_queue_handler, imu_public_component);
+    if(check_is_queue_active(0))
+	{
+		create_handle_for_component(&nav_algo_public_component);
+	}
     return true;
 }
 
@@ -175,9 +167,11 @@ static dfs_feature_details_t nav_algo_converge_details(dfs_feature_details_t fir
     return_details.min_y = (first_det.min_y < second_det.min_y) ? first_det.min_y : second_det.min_y;
     return_details.max_y = (first_det.max_y < second_det.max_y) ? first_det.max_y : second_det.max_y;
     return_details.average_angle = (first_det.average_angle * first_det.number_of_nodes_in_feature) + (second_det.average_angle * second_det.number_of_nodes_in_feature)
-    return_details.average_angle = return_details.average_angle / number_of_nodes_in_feature;
+    return_details.average_angle = return_details.average_angle / return_details.number_of_nodes_in_feature;
     return_details.average_distance = (first_det.average_distance * first_det.number_of_nodes_in_feature) + (second_det.average_distance * second_det.number_of_nodes_in_feature)
-    return_details.average_distance = return_details.average_distance / number_of_nodes_in_feature;
+    return_details.average_distance = return_details.average_distance / return_details.number_of_nodes_in_feature;
+    return_details.average_confidence = (first_det.average_confidence * first_det.number_of_nodes_in_feature) + (second_det.average_confidence * second_det.number_of_nodes_in_feature)
+    return_details.average_confidence = return_details.average_confidence / return_details.number_of_nodes_in_feature;
     return return_details;
 }
 
@@ -190,7 +184,7 @@ static dfs_feature_details_t nav_algo_create_new_feature_with_dfs(uint8_t v_iter
     //need to calculate z distance per cell using sin, then calculate slope.
     double current_run = ((double) tof_data->depth_pixel_field[v_iter][h_iter]) * sin(DEGREES_TO_RAD * current_pixel_diff);
     //from there, use arctan to calculate angle.
-    double angle = RAD_TO_DEGREES * atan2(current_diff, current_run);
+    double angle = DEGREES_TO_UINT8_T_ANGLE * RAD_TO_DEGREES * atan2(current_diff, current_run);
     dfs_feature_details_t node_details = 
     {
         .number_of_nodes_in_feature = 1,
@@ -198,15 +192,15 @@ static dfs_feature_details_t nav_algo_create_new_feature_with_dfs(uint8_t v_iter
         .max_x = h_iter,
         .min_y = v_iter,
         .max_y = v_iter,
-        .average_angle = (int16_t) angle,
-        .average_distance = tof_data->depth_pixel_field[v_iter][h_iter],
+        .average_angle = ((int16_t) angle & 0x00FF),
+        .average_distance = (tof_data->depth_pixel_field[v_iter][h_iter] & 0x0000FFFF),
+        .average_confidence = ((tof_data->depth_pixel_field[v_iter][h_iter] >> 24) & 0x00FF),
     };
     s_gradient_map.graph_points[v_iter][h_iter].visited = true;
+    //for vertical angle, we only want to add if the angle is flat.
     if(v_iter > 0 && !s_gradient_map.graph_points[v_iter - 1][h_iter].visited)
     {
-        uint16_t up_diff = s_gradient_map.graph_points[v_iter][h_iter].v_diff - s_gradient_map.graph_points[v_iter - 1][h_iter].v_diff
-        if(up_diff < 0) up_diff = -up_diff; //invert if negative
-        if(up_diff < MAX_GRADIENT_DIFF_FOR_FEATURE || s_gradient_map.graph_points[v_iter - 1][h_iter].v_diff < MAX_GRADIENT_DIFF_FOR_FEATURE)
+        if(s_gradient_map.graph_points[v_iter - 1][h_iter].v_diff < MAX_GRADIENT_DIFF_FOR_FEATURE)
         {
             dfs_feature_details_t up_details = nav_algo_create_new_feature_with_dfs(v_iter - 1, h_iter, tof_data);
             node_details = nav_algo_converge_details(node_details, up_details);
@@ -214,17 +208,16 @@ static dfs_feature_details_t nav_algo_create_new_feature_with_dfs(uint8_t v_iter
     }
     if(v_iter < tof_data->horizontal_size - 1 && !s_gradient_map.graph_points[v_iter + 1][h_iter].visited)
     {
-        uint16_t down_diff = s_gradient_map.graph_points[v_iter][h_iter].v_diff - s_gradient_map.graph_points[v_iter + 1][h_iter].v_diff
-        if(down_diff < 0) down_diff = -down_diff; //invert if negative
-        if(down_diff < MAX_GRADIENT_DIFF_FOR_FEATURE || s_gradient_map.graph_points[v_iter][h_iter].v_diff < MAX_GRADIENT_DIFF_FOR_FEATURE)
+        if(s_gradient_map.graph_points[v_iter][h_iter].v_diff < MAX_GRADIENT_DIFF_FOR_FEATURE)
         {
             dfs_feature_details_t down_details = nav_algo_create_new_feature_with_dfs(v_iter + 1, h_iter, tof_data);
             node_details = nav_algo_converge_details(node_details, down_details);
         }
     }
+    //horizontal angles get calculated to determine angle of feature.
     if(h_iter > 0 && !s_gradient_map.graph_points[v_iter][h_iter - 1].visited)
     {
-        uint16_t left_diff = s_gradient_map.graph_points[v_iter][h_iter].h_diff - s_gradient_map.graph_points[v_iter][h_iter - 1].h_diff
+        int16_t left_diff = s_gradient_map.graph_points[v_iter][h_iter].h_diff - s_gradient_map.graph_points[v_iter][h_iter - 1].h_diff
         if(left_diff < 0) left_diff = -left_diff; //invert if negative
         if(left_diff < MAX_GRADIENT_DIFF_FOR_FEATURE || s_gradient_map.graph_points[v_iter][h_iter - 1].h_diff < MAX_GRADIENT_DIFF_FOR_FEATURE)
         {
@@ -234,7 +227,7 @@ static dfs_feature_details_t nav_algo_create_new_feature_with_dfs(uint8_t v_iter
     }
     if(h_iter < tof_data->horizontal_size - 1 && !s_gradient_map.graph_points[v_iter][h_iter + 1].visited)
     {
-        uint16_t right_diff = s_gradient_map.graph_points[v_iter][h_iter].h_diff - s_gradient_map.graph_points[v_iter][h_iter + 1].h_diff
+        int16_t right_diff = s_gradient_map.graph_points[v_iter][h_iter].h_diff - s_gradient_map.graph_points[v_iter][h_iter + 1].h_diff
         if(right_diff < 0) right_diff = -right_diff; //invert if negative
         if(right_diff < MAX_GRADIENT_DIFF_FOR_FEATURE || s_gradient_map.graph_points[v_iter][h_iter].h_diff < MAX_GRADIENT_DIFF_FOR_FEATURE)
         {
@@ -316,6 +309,24 @@ static feature_extraction_t nav_algo_feature_extraction_from_tof_data(TOF_DATA_t
 static NAV_POINT_T nav_algo_convert_node_details_to_landmark(dfs_feature_details_t details)
 {
     NAV_POINT_T return_point;
+    return_point.rotation = details.average_angle;
+    return_point.confidence = details.average_confidence;
+    double pixel_width = (double) (details.max_x - details.min_x + 1) * DEGREES_PER_TOF_PIXEL;
+    double pixel_height = (double) (details.max_y - details.min_y + 1) * DEGREES_PER_TOF_PIXEL;
+    double pixel_width_average = ((((double) (details.max_x + details.min_x)) / 2.0) - 3.5) * DEGREES_PER_TOF_PIXEL;
+    double pixel_height_average = ((((double) (details.max_y + details.min_y)) / 2.0) - 3.5) * DEGREES_PER_TOF_PIXEL;
+    if(pixel_width_average < 0) pixel_width_average = -pixel_width_average;
+    if(pixel_height_average < 0) pixel_height_average = -pixel_height_average;
+    double width = (double) average_distance * sin(pixel_width * DEGREES_TO_RAD);
+    double height = (double) average_distance * sin(pixel_width * DEGREES_TO_RAD);
+    //Need to fix this - minimum width/height should be 1. If height > 0x00FF, should be 0.
+    return_point.width = ((uint32_t) width) * 0x00FF;
+    return_point.height = ((uint32_t) width) * 0x00FF;
+    //need to make sure these are all positive
+    uint16_t z_dist = (uint16_t) (average_distance * cos(pixel_width_average * DEGREES_TO_RAD));
+    uint16_t x_dist = (uint16_t) (average_distance * sin(pixel_width_average * DEGREES_TO_RAD));
+    uint16_t y_dist = (uint16_t) (average_distance * sin(pixel_height_average * DEGREES_TO_RAD));
+    return_point.xyz_pos = ((x_dist & 0x03FF) << 20) + ((y_dist & 0x03FF) << 10) + (z_dist & 0x03FF);
     return return_point;
 }
 
@@ -326,12 +337,20 @@ static void nav_algo_check_tof_array_against_map(TOF_DATA_t* tof_data)
     //step 1: generate landmarks
     feature_extraction_t features_list = nav_algo_feature_extraction_from_tof_data(tof_data);
 
-    //step 2: find 2 most confident landmarks
     if(!features_list.number_of_features)
     {
         //no features were extracted from the array.
         return;
     }
+
+    NAV_POINT_T landmark_list[MAX_FEATURES_PER_TOF_ARRAY] = {0};
+    for(uint8_t list_iter = 0; list_iter < features_list.number_of_features; list_iter++)
+    {
+        landmark_list[list_iter] = nav_algo_convert_node_details_to_landmark(features_list.node_details[list_iter]);
+    }
+
+    //step 2: find 2 most confident landmarks
+    //Sort landmark_list here?
 
     //step 3: determine rotation + translation error of landmark 1 to each existing landmark on submap
     NAV_POINT_T landmark_error[MAX_POINTS_PER_SUBMAP] = {0};
@@ -344,6 +363,10 @@ static void nav_algo_check_tof_array_against_map(TOF_DATA_t* tof_data)
             break;
         }
         //calculate error of pointCloud[iter] - features_list[0]
+        landmark_error.xyz_pos = submap_pointer->pointCloud[iter].xyz_pos - landmark_list[0].xyz_pos;
+        landmark_error.width = submap_pointer->pointCloud[iter].width - landmark_list[0].width;
+        landmark_error.height = submap_pointer->pointCloud[iter].height - landmark_list[0].height;
+        landmark_error.rotation = submap_pointer->pointCloud[iter].rotation - landmark_list[0].rotation;
         //if error is sufficiently close to s_nav_robot_position for any given feature in the pointcloud, we have matched the feature.
         //otherwise, continue with step 3.1
     }
