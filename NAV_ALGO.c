@@ -1,7 +1,6 @@
 #include <math.h>
 
 #include "NAV_ALGO.h"
-#include "MESSAGE_QUEUE.h"
 #include "ToF_I2C.h"
 #include "IMU_SPI.h"
 #include "FLASH_SPI.h"
@@ -42,6 +41,7 @@ static callback_handle_t s_nav_imu_handle;
 static robot_position_t s_nav_robot_position;
 static NAV_MAP_T s_nav_map;
 static bool s_is_navigation_enabled = false;
+static bool s_is_debug_enabled = false;
 
 static gradient_map_t s_gradient_map = {0};
 
@@ -317,15 +317,15 @@ static NAV_POINT_T nav_algo_convert_node_details_to_landmark(dfs_feature_details
     double pixel_height_average = ((((double) (details.max_y + details.min_y)) / 2.0) - 3.5) * DEGREES_PER_TOF_PIXEL;
     if(pixel_width_average < 0) pixel_width_average = -pixel_width_average;
     if(pixel_height_average < 0) pixel_height_average = -pixel_height_average;
-    double width = (double) average_distance * sin(pixel_width * DEGREES_TO_RAD);
-    double height = (double) average_distance * sin(pixel_width * DEGREES_TO_RAD);
+    double width = (double) details.average_distance * sin(pixel_width * DEGREES_TO_RAD);
+    double height = (double) details.average_distance * sin(pixel_width * DEGREES_TO_RAD);
     //Need to fix this - minimum width/height should be 1. If height > 0x00FF, should be 0.
     return_point.width = ((uint32_t) width) * 0x00FF;
     return_point.height = ((uint32_t) width) * 0x00FF;
     //need to make sure these are all positive
-    uint16_t z_dist = (uint16_t) (average_distance * cos(pixel_width_average * DEGREES_TO_RAD));
-    uint16_t x_dist = (uint16_t) (average_distance * sin(pixel_width_average * DEGREES_TO_RAD));
-    uint16_t y_dist = (uint16_t) (average_distance * sin(pixel_height_average * DEGREES_TO_RAD));
+    uint16_t z_dist = (uint16_t) (details.average_distance * cos(pixel_width_average * DEGREES_TO_RAD));
+    uint16_t x_dist = (uint16_t) (details.average_distance * sin(pixel_width_average * DEGREES_TO_RAD));
+    uint16_t y_dist = (uint16_t) (details.average_distance * sin(pixel_height_average * DEGREES_TO_RAD));
     return_point.xyz_pos = ((x_dist & 0x03FF) << 20) + ((y_dist & 0x03FF) << 10) + (z_dist & 0x03FF);
     return return_point;
 }
@@ -341,6 +341,20 @@ static void nav_algo_check_tof_array_against_map(TOF_DATA_t* tof_data)
     {
         //no features were extracted from the array.
         return;
+    }
+
+    if(s_is_debug_enabled && check_is_queue_active(0))
+    {
+        //send features list to the message queue
+		message_info_t convert_feature_msg;
+        feature_extraction_t* msg_features_list = malloc(sizeof(feature_extraction_t));
+        memcpy(msg_features_list, features_list, sizeof(feature_extraction_t));
+		convert_feature_msg.message_data = (void*) msg_features_list;
+		convert_feature_msg.message_size = sizeof(feature_extraction_t);
+		convert_feature_msg.is_pointer = true;
+		convert_feature_msg.component_handle = nav_algo_public_component;
+		convert_feature_msg.message_type = NAV_RAW_FEATURE_DATA;
+		send_message_to_normal_queue(convert_feature_msg);
     }
 
     NAV_POINT_T landmark_list[MAX_FEATURES_PER_TOF_ARRAY] = {0};
@@ -371,6 +385,11 @@ static void nav_algo_check_tof_array_against_map(TOF_DATA_t* tof_data)
         //otherwise, continue with step 3.1
     }
 
+    if(s_is_debug_enabled)
+    {
+        //send transform list to the message queue
+    }
+
     //step 3.1: if necessary, determine rotation + translation error of landmark 2 to each existing landmark on submap
 
     //step 3.2: if necessary, compare each set of errors to build array of potential transforms based on lowest shared error.
@@ -388,3 +407,9 @@ static void nav_algo_check_tof_array_against_map(TOF_DATA_t* tof_data)
 //do the same for a second landmark in array.
 //try to find minimum error between two rotational and translation vectors. Use average of the two vectors as array transform onto map
 //update landmarks on map according to new landmarks from array
+
+//enable sending debug messages to the message queue
+bool nav_algo_enable_debug_messages(bool enable)
+{
+    return (s_is_debug_enabled = enable);
+}
