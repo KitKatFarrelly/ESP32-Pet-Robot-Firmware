@@ -35,6 +35,7 @@ static bool s_gen_features = false;
 static callback_handle_t UART_callback_handles[dispatcher_max] = {0};
 static callback_handle_t s_ToF_callback_handle;
 static callback_handle_t s_imu_callback_handle;
+static callback_handle_t s_nav_callback_handle;
 
 // helper functions
 
@@ -928,6 +929,20 @@ static void uart_nav_cmds(uint8_t argc, char** argv)
         }
         ESP_LOGI(TAG, "serial value set to %d", s_gen_features);
     }
+    if(strcmp((char*) argv[1], (const char*) "register_nav_debug") == 0)
+    {
+        if(strcmp((char*) argv[2], (const char*) "enable") == 0)
+        {
+            s_nav_callback_handle = register_normal_handler_for_messages(uart_msg_queue_handler, nav_algo_public_component);
+            ESP_LOGI(TAG, "Nav debug callback handle is: %u", s_nav_callback_handle);
+        }
+        else if(strcmp((char*) argv[2], (const char*) "disable") == 0)
+        {
+            uint8_t err = unregister_normal_handler_for_messages(nav_algo_public_component, s_nav_callback_handle);
+            ESP_LOGI(TAG, "Unreigster error code is: %u", err);
+            s_imu_callback_handle = 0;
+        }
+    }
 }
 
 static uint8_t uart_convert_str_to_handedness(char * cmd_buf)
@@ -1076,11 +1091,11 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
             serial_out[3] = 'w';
             if(h_size == 8)
             {
-                serial_out[4] = 192; //128 bytes of data
+                serial_out[4] = 192; //192 bytes of data
             }
             else
             {
-                serial_out[4] = 48; //32 bytes of data
+                serial_out[4] = 48; //48 bytes of data
             }
             serial_out[5] = 4; //data type is ToF
         }
@@ -1180,14 +1195,43 @@ static void uart_msg_queue_handler(component_handle_t component_type, uint8_t me
     }
     else if(component_type == nav_algo_public_component)
     {
-        switch(message_type)
+        if(s_serialize)
         {
-            case NAV_RAW_FEATURE_DATA:
-                break;
-            case NAV_TRANSFORM_DATA:
-                break;
-            case NAV_MAP_DATA:
-                break;
+            //Even though the switch only has one option, it's used because there
+            //May potentially be other nav debug types in the future.
+            switch(message_type)
+            {
+                case NAV_RAW_FEATURE_DATA:
+                case NAV_TRANSFORM_DATA:
+                case NAV_MAP_DATA:
+                    NAV_POINT_T *point_data = (NAV_POINT_T *)message_data;
+                    serial_out[0] = 0xFE;
+                    serial_out[1] = 'n';
+                    serial_out[2] = 'a';
+                    serial_out[3] = 'v';
+                    serial_out[4] = message_size; //128 bytes of data
+                    serial_out[5] = 5 + message_type; //data type is 5 + message_type
+                    uint8_t number_of_points = message_size / 8; //8 bytes per point
+                    for(uint8_t point_data_iter = 0; point_data_iter < number_of_points && point_data_iter < (UART_SERIAL_MAX / 8); point_data_iter++)
+                    {
+                        uint8_t point_offset = point_data_iter * 8;
+                        serial_out[RAW_HEADER_BASE + point_offset] = (point_data[point_data_iter].xyz_pos >> 24) & 0xFF;
+                        serial_out[RAW_HEADER_BASE + point_offset + 1] = (point_data[point_data_iter].xyz_pos >> 16) & 0xFF;
+                        serial_out[RAW_HEADER_BASE + point_offset + 2] = (point_data[point_data_iter].xyz_pos >> 8) & 0xFF;
+                        serial_out[RAW_HEADER_BASE + point_offset + 3] = (point_data[point_data_iter].xyz_pos) & 0xFF;
+                        serial_out[RAW_HEADER_BASE + point_offset + 4] = point_data[point_data_iter].width;
+                        serial_out[RAW_HEADER_BASE + point_offset + 5] = point_data[point_data_iter].height;
+                        serial_out[RAW_HEADER_BASE + point_offset + 6] = point_data[point_data_iter].rotation;
+                        serial_out[RAW_HEADER_BASE + point_offset + 7] = point_data[point_data_iter].confidence;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+        else
+        {
+            ESP_LOGE(TAG, "nav component data only gets transferred as serial!");
         }
     }
     else

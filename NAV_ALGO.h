@@ -14,7 +14,7 @@ typedef enum
     NAV_TRANSFORM_DATA,
     NAV_MAP_DATA,
     NAV_MSG_MAX,
-} IMU_MESSAGE_TYPES_t;
+} NAV_MESSAGE_TYPES_t;
 
 typedef uint32_t NAV_MAP_HANDLER_T;
 
