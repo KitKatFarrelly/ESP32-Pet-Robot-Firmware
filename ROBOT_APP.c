@@ -22,6 +22,7 @@
 #include "MTR_DRVR.h"
 #include "UART_CMDS.h"
 #include "FLASH_SPI.h"
+#include "NAV_ALGO.h"
 
 static const char *TAG = "APP LOG";
 

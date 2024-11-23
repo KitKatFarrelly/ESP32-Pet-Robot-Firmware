@@ -1,6 +1,12 @@
 #ifndef H_TOF_DRVR
 #define H_TOF_DRVR
 
+#ifdef FUNCTIONAL_TESTS
+#include "mocked_functions.h"
+#else
+#include "esp_err.h"
+#endif
+
 #include "MESSAGE_QUEUE.h"
 
 #define tmf8821_fac_cal		"tmf8821_fac"

@@ -911,7 +911,7 @@ static void uart_serial_cmds(uint8_t argc, char** argv)
 
 static void uart_nav_cmds(uint8_t argc, char** argv)
 {
-    if(argv < 3)
+    if(argc < 3)
     {
         ESP_LOGE(TAG, "incorrect number of args");
         return;
@@ -920,13 +920,13 @@ static void uart_nav_cmds(uint8_t argc, char** argv)
     {
         if(strcmp((char*) argv[2], (const char*) "enable") == 0)
         {
-            s_nav_callback_handle = register_normal_handler_for_messages(uart_msg_queue_handler, nav_algo_public_component);
+            s_nav_callback_handle = register_component_handler_for_messages(uart_msg_queue_handler, nav_algo_public_component);
             nav_algo_enable_debug_messages(true);
             ESP_LOGI(TAG, "Nav debug callback handle is: %u", s_nav_callback_handle);
         }
         else if(strcmp((char*) argv[2], (const char*) "disable") == 0)
         {
-            uint8_t err = unregister_normal_handler_for_messages(nav_algo_public_component, s_nav_callback_handle);
+            uint8_t err = unregister_component_handler_for_messages(nav_algo_public_component, s_nav_callback_handle);
             nav_algo_enable_debug_messages(false);
             ESP_LOGI(TAG, "Unreigster error code is: %u", err);
             s_imu_callback_handle = 0;
@@ -1383,6 +1383,11 @@ static void run_command(uint8_t rx_size, char *buf)
         case uart:
         {
             uart_serial_cmds(argc, argv);
+            break;
+        }
+        case nav:
+        {
+            uart_nav_cmds(argc, argv);
             break;
         }
         default:

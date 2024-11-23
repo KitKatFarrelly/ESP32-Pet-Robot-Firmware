@@ -1,4 +1,11 @@
 #include <math.h>
+#include <string.h>
+
+#ifdef FUNCTIONAL_TESTS
+#include "mocked_functions.h"
+#else
+#include "esp_log.h"
+#endif
 
 #include "NAV_ALGO.h"
 #include "ToF_I2C.h"
@@ -18,8 +25,8 @@
 typedef struct
 {
     NAV_POINT_T robot_pos;
-    signed int16_t submap_x;
-    signed int16_t submap_z;
+    int16_t submap_x;
+    int16_t submap_z;
 } robot_position_t;
 
 typedef struct
@@ -35,6 +42,11 @@ typedef struct
     gradient_graph_point_t graph_points[MAX_GRADIENT_MAP_SIZE][MAX_GRADIENT_MAP_SIZE]; //use max size for gradient map
 } gradient_map_t;
 
+typedef struct
+{
+    dfs_feature_details_t node_details[MAX_FEATURES_PER_TOF_ARRAY];
+    uint8_t number_of_features;
+} feature_extraction_t;
 
 static callback_handle_t s_nav_tof_handle;
 static callback_handle_t s_nav_imu_handle;
@@ -121,18 +133,13 @@ NAV_MAP_HANDLER_T nav_algo_get_current_map(void)
     return NULL;
 }
 
-NAV_CURRENT_POS_T nav_algo_get_current_pos(void)
-{
-    return NULL;
-}
-
-NAV_SUBMAP_T *nav_algo_get_submap(int submap_x, int submap_z)
+NAV_SUBMAP_T *nav_algo_get_submap(int16_t submap_x, int16_t submap_z)
 {
     uint8_t submap_x_element = (uint8_t) ((submap_x + (MAX_POINTS_PER_SUBMAP / 2)) & 0xFF);
     uint8_t submap_z_element = (uint8_t) ((submap_z + (MAX_POINTS_PER_SUBMAP / 2)) & 0xFF);
     if(submap_x_element >= MAX_POINTS_PER_SUBMAP) submap_x_element = MAX_POINTS_PER_SUBMAP - 1;
     if(submap_z_element >= MAX_POINTS_PER_SUBMAP) submap_z_element = MAX_POINTS_PER_SUBMAP - 1;
-    return &(s_nav_map.map[submap_x_element][submap_z_element])
+    return &(s_nav_map.map[submap_x_element][submap_z_element]);
 }
 
 static void nav_algo_queue_handler(component_handle_t component_type, uint8_t message_type, void* message_data, size_t message_size)
@@ -170,11 +177,11 @@ static dfs_feature_details_t nav_algo_converge_details(dfs_feature_details_t fir
     return_details.max_x = (first_det.max_x < second_det.max_x) ? first_det.max_x : second_det.max_x;
     return_details.min_y = (first_det.min_y < second_det.min_y) ? first_det.min_y : second_det.min_y;
     return_details.max_y = (first_det.max_y < second_det.max_y) ? first_det.max_y : second_det.max_y;
-    return_details.average_angle = (first_det.average_angle * first_det.number_of_nodes_in_feature) + (second_det.average_angle * second_det.number_of_nodes_in_feature)
+    return_details.average_angle = (first_det.average_angle * first_det.number_of_nodes_in_feature) + (second_det.average_angle * second_det.number_of_nodes_in_feature);
     return_details.average_angle = return_details.average_angle / return_details.number_of_nodes_in_feature;
-    return_details.average_distance = (first_det.average_distance * first_det.number_of_nodes_in_feature) + (second_det.average_distance * second_det.number_of_nodes_in_feature)
+    return_details.average_distance = (first_det.average_distance * first_det.number_of_nodes_in_feature) + (second_det.average_distance * second_det.number_of_nodes_in_feature);
     return_details.average_distance = return_details.average_distance / return_details.number_of_nodes_in_feature;
-    return_details.average_confidence = (first_det.average_confidence * first_det.number_of_nodes_in_feature) + (second_det.average_confidence * second_det.number_of_nodes_in_feature)
+    return_details.average_confidence = (first_det.average_confidence * first_det.number_of_nodes_in_feature) + (second_det.average_confidence * second_det.number_of_nodes_in_feature);
     return_details.average_confidence = return_details.average_confidence / return_details.number_of_nodes_in_feature;
     return return_details;
 }
@@ -221,7 +228,7 @@ static dfs_feature_details_t nav_algo_create_new_feature_with_dfs(uint8_t v_iter
     //horizontal angles get calculated to determine angle of feature.
     if(h_iter > 0 && !s_gradient_map.graph_points[v_iter][h_iter - 1].visited)
     {
-        int16_t left_diff = s_gradient_map.graph_points[v_iter][h_iter].h_diff - s_gradient_map.graph_points[v_iter][h_iter - 1].h_diff
+        int16_t left_diff = s_gradient_map.graph_points[v_iter][h_iter].h_diff - s_gradient_map.graph_points[v_iter][h_iter - 1].h_diff;
         if(left_diff < 0) left_diff = -left_diff; //invert if negative
         if(left_diff < MAX_GRADIENT_DIFF_FOR_FEATURE || s_gradient_map.graph_points[v_iter][h_iter - 1].h_diff < MAX_GRADIENT_DIFF_FOR_FEATURE)
         {
@@ -231,7 +238,7 @@ static dfs_feature_details_t nav_algo_create_new_feature_with_dfs(uint8_t v_iter
     }
     if(h_iter < tof_data->horizontal_size - 1 && !s_gradient_map.graph_points[v_iter][h_iter + 1].visited)
     {
-        int16_t right_diff = s_gradient_map.graph_points[v_iter][h_iter].h_diff - s_gradient_map.graph_points[v_iter][h_iter + 1].h_diff
+        int16_t right_diff = s_gradient_map.graph_points[v_iter][h_iter].h_diff - s_gradient_map.graph_points[v_iter][h_iter + 1].h_diff;
         if(right_diff < 0) right_diff = -right_diff; //invert if negative
         if(right_diff < MAX_GRADIENT_DIFF_FOR_FEATURE || s_gradient_map.graph_points[v_iter][h_iter].h_diff < MAX_GRADIENT_DIFF_FOR_FEATURE)
         {
@@ -296,9 +303,9 @@ static feature_extraction_t nav_algo_feature_extraction_from_tof_data(TOF_DATA_t
                             min_feature = list_iter;
                         }
                     }
-                    if(mew_node.number_of_nodes_in_feature > return_features_list.node_details[min_feature].number_of_nodes_in_feature)
+                    if(new_node.number_of_nodes_in_feature > return_features_list.node_details[min_feature].number_of_nodes_in_feature)
                     {
-                        return_features_list.node_details[min_feature].number_of_nodes_in_feature = mew_node.number_of_nodes_in_feature;
+                        return_features_list.node_details[min_feature].number_of_nodes_in_feature = new_node.number_of_nodes_in_feature;
                     }
                 }
                 
@@ -322,10 +329,10 @@ static NAV_POINT_T nav_algo_convert_node_details_to_landmark(dfs_feature_details
     if(pixel_width_average < 0) pixel_width_average = -pixel_width_average;
     if(pixel_height_average < 0) pixel_height_average = -pixel_height_average;
     double width = (double) details.average_distance * sin(pixel_width * DEGREES_TO_RAD);
-    double height = (double) details.average_distance * sin(pixel_width * DEGREES_TO_RAD);
+    double height = (double) details.average_distance * sin(pixel_height * DEGREES_TO_RAD);
     //Need to fix this - minimum width/height should be 1. If height > 0x00FF, should be 0.
     return_point.width = ((uint32_t) width) * 0x00FF;
-    return_point.height = ((uint32_t) width) * 0x00FF;
+    return_point.height = ((uint32_t) height) * 0x00FF;
     //need to make sure these are all positive
     uint16_t z_dist = (uint16_t) (details.average_distance * cos(pixel_width_average * DEGREES_TO_RAD));
     uint16_t x_dist = (uint16_t) (details.average_distance * sin(pixel_width_average * DEGREES_TO_RAD));
@@ -336,7 +343,7 @@ static NAV_POINT_T nav_algo_convert_node_details_to_landmark(dfs_feature_details
 
 static uint8_t nav_algo_move_robot_according_to_transform(NAV_POINT_T *current, NAV_POINT_T transform, uint8_t op)
 {
-    //y axis is up/down!!! need to make sure that this doesn't drift problematically for ground
+    //y axis is up/down!!! need to make sure that this doesn't drift problematically for ground robots
     uint32_t current_z = current->xyz_pos & 0x000003FF;
     uint32_t current_y = current->xyz_pos & 0x000FFC00;
     uint32_t current_x = current->xyz_pos & 0x3FF00000;
@@ -344,30 +351,33 @@ static uint8_t nav_algo_move_robot_according_to_transform(NAV_POINT_T *current, 
     uint32_t transform_y = transform.xyz_pos & 0x000FFC00;
     uint32_t transform_x = transform.xyz_pos & 0x3FF00000;
     uint8_t return_overflow = 0;
+    uint32_t new_z = 0;
+    uint32_t new_y = 0;
+    uint32_t new_x = 0;
     switch(op)
     {
         case 0: //add
-            uint32_t new_z = current_z + transform_z;
-            uint32_t new_y = current_y + transform_y;
-            uint32_t new_x = current_x + transform_x;
+            new_z = current_z + transform_z;
+            new_y = current_y + transform_y;
+            new_x = current_x + transform_x;
             current->rotation += transform.rotation;
             break;
         case 1: //subtract current - transform
-            uint32_t new_z = current_z - transform_z;
-            uint32_t new_y = current_y - transform_y;
-            uint32_t new_x = current_x - transform_x;
+            new_z = current_z - transform_z;
+            new_y = current_y - transform_y;
+            new_x = current_x - transform_x;
             current->rotation -= transform.rotation;
             break;
         case 2: //subtract transform - current
-            uint32_t new_z = transform_z - current_z;
-            uint32_t new_y = transform_y - current_y;
-            uint32_t new_x = transform_x - current_x;
+            new_z = transform_z - current_z;
+            new_y = transform_y - current_y;
+            new_x = transform_x - current_x;
             current->rotation = transform.rotation - current->rotation;
             break;
         case 3: //add, excepting the y vector
-            uint32_t new_z = transform_z - current_z;
-            uint32_t new_y = current_y;
-            uint32_t new_x = transform_x - current_x;
+            new_z = transform_z - current_z;
+            new_y = current_y;
+            new_x = transform_x - current_x;
             current->rotation += transform.rotation;
             break;
         default:
@@ -471,10 +481,10 @@ static void nav_algo_check_tof_array_against_map(TOF_DATA_t* tof_data)
         //need to transform into the fram of reference of the robot position first
         landmark_list_transformed[iter].xyz_pos = landmark_list[0].xyz_pos;
         landmark_list_transformed[iter].rotation = landmark_list[0].rotation;
-        nav_algo_move_robot_according_to_transform(landmark_list_transformed[iter], s_nav_robot_position.robot_pos, 0);
+        nav_algo_move_robot_according_to_transform(&landmark_list_transformed[iter], s_nav_robot_position.robot_pos, 0);
         //calculate error of pointCloud[iter] - features_list[0]
         landmark_error[iter] = landmark_list_transformed[iter];
-        nav_algo_move_robot_according_to_transform(landmark_error[iter], submap_pointer->pointCloud[iter], 2);
+        nav_algo_move_robot_according_to_transform(&landmark_error[iter], submap_pointer->pointCloud[iter], 2);
         landmark_error[iter].width = submap_pointer->pointCloud[iter].width - landmark_list[0].width;
         landmark_error[iter].height = submap_pointer->pointCloud[iter].height - landmark_list[0].height;
         //if error is sufficiently close to s_nav_robot_position for any given feature in the pointcloud, we have matched the feature.
@@ -516,7 +526,7 @@ static void nav_algo_check_tof_array_against_map(TOF_DATA_t* tof_data)
     //TODO: calculate which entry in landmark error list has the lowest error
     if(closest_point < MAX_POINTS_PER_SUBMAP)
     {
-        uint8_t overflows = nav_algo_move_robot_according_to_transform(s_nav_robot_position.robot_pos, landmark_error[closest_point], 3);
+        uint8_t overflows = nav_algo_move_robot_according_to_transform(&(s_nav_robot_position.robot_pos), landmark_error[closest_point], 3);
         if(overflows & 0x01)
         {
             s_nav_robot_position.submap_z++;

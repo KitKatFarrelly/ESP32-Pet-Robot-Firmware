@@ -1,6 +1,8 @@
 #ifndef H_MESSAGE_QUEUE
 #define H_MESSAGE_QUEUE
 
+#include <stdbool.h>
+
 #define MESSAGE_QUEUE_LENGTH 100
 
 typedef uint8_t component_handle_t;

@@ -1,6 +1,8 @@
 #ifndef H_NAV_ALGO
 #define H_NAV_ALGO
 
+#include <stdbool.h>
+
 #include "MESSAGE_QUEUE.h"
 
 //128 * 8 bytes = 1kB per submap.
@@ -46,16 +48,6 @@ typedef struct
     NAV_MAP_HANDLER_T handler;
 } NAV_MAP_T;
 
-typedef struct 
-{
-    int submap_x;
-    int submap_y;
-    uint16_t cur_x;
-    uint16_t cur_y;
-    uint16_t cur_z;
-    uint16_t cur_rotation;
-} NAV_CURRENT_POS_T;
-
 typedef struct
 {
     uint8_t number_of_nodes_in_feature;
@@ -67,12 +59,6 @@ typedef struct
     uint16_t average_distance;
     uint16_t average_confidence;
 } dfs_feature_details_t;
-
-typedef struct
-{
-    dfs_feature_details_t node_details[MAX_FEATURES_PER_TOF_ARRAY];
-    uint8_t number_of_features;
-} feature_extraction_t;
 
 bool nav_algo_init(void);
 
@@ -92,9 +78,7 @@ bool nav_algo_load_map(NAV_MAP_HANDLER_T map_to_load);
 
 NAV_MAP_HANDLER_T nav_algo_get_current_map(void);
 
-NAV_CURRENT_POS_T nav_algo_get_current_pos(void);
-
-NAV_SUBMAP_T *nav_algo_get_submap(int submap_x, int submap_z);
+NAV_SUBMAP_T *nav_algo_get_submap(int16_t submap_x, int16_t submap_z);
 
 bool nav_algo_enable_debug_messages(bool enable);
 

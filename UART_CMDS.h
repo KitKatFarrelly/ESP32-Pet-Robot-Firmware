@@ -12,6 +12,7 @@ typedef enum
     led,
     mesh,
     uart,
+    nav,
     error,
     dispatcher_max,
 } dispatcher_type_t;
