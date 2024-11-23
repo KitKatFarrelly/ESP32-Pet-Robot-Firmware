@@ -4,7 +4,7 @@
 #include "MESSAGE_QUEUE.h"
 
 //128 * 8 bytes = 1kB per submap.
-#define MAX_POINTS_PER_SUBMAP 128
+#define MAX_POINTS_PER_SUBMAP 10 //128 undo this after testing
 
 #define MAX_SUBMAPS_PER_DIRECTION 10
 
@@ -94,7 +94,7 @@ NAV_MAP_HANDLER_T nav_algo_get_current_map(void);
 
 NAV_CURRENT_POS_T nav_algo_get_current_pos(void);
 
-NAV_SUBMAP_T *nav_algo_get_submap(int submap_x, int submap_y);
+NAV_SUBMAP_T *nav_algo_get_submap(int submap_x, int submap_z);
 
 bool nav_algo_enable_debug_messages(bool enable);
 

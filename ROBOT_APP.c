@@ -78,7 +78,7 @@ void app_main(void)
 
 	UART_INIT();
 	
-	//Initialize all components
+	//Initialize all drivers
 	
 	LED_INIT();
 	
@@ -88,7 +88,9 @@ void app_main(void)
 	
 	IMU_INIT();
 
-	//TODO: Setup for Flash and Console Commands (over USB)
+	//Initialize higher level components
+	
+	nav_algo_init();
 
 	//TODO: Setup for ESP-NOW
 	

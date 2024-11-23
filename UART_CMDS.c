@@ -31,7 +31,6 @@ static const char *TAG = "USB_UART";
 static component_handle_t s_uart_component_handle = 0;
 static bool s_has_component_handle = false;
 static bool s_serialize = false;
-static bool s_gen_features = false;
 static callback_handle_t UART_callback_handles[dispatcher_max] = {0};
 static callback_handle_t s_ToF_callback_handle;
 static callback_handle_t s_imu_callback_handle;
@@ -917,28 +916,18 @@ static void uart_nav_cmds(uint8_t argc, char** argv)
         ESP_LOGE(TAG, "incorrect number of args");
         return;
     }
-    if(strcmp((char*) argv[1], (const char*) "set_generate_features") == 0)
-    {
-        if(strcmp((char*) argv[2], (const char*) "true") == 0)
-        {
-            s_gen_features = true;
-        }
-        else if(strcmp((char*) argv[2], (const char*) "false") == 0)
-        {
-            s_gen_features = false; 
-        }
-        ESP_LOGI(TAG, "serial value set to %d", s_gen_features);
-    }
     if(strcmp((char*) argv[1], (const char*) "register_nav_debug") == 0)
     {
         if(strcmp((char*) argv[2], (const char*) "enable") == 0)
         {
             s_nav_callback_handle = register_normal_handler_for_messages(uart_msg_queue_handler, nav_algo_public_component);
+            nav_algo_enable_debug_messages(true);
             ESP_LOGI(TAG, "Nav debug callback handle is: %u", s_nav_callback_handle);
         }
         else if(strcmp((char*) argv[2], (const char*) "disable") == 0)
         {
             uint8_t err = unregister_normal_handler_for_messages(nav_algo_public_component, s_nav_callback_handle);
+            nav_algo_enable_debug_messages(false);
             ESP_LOGI(TAG, "Unreigster error code is: %u", err);
             s_imu_callback_handle = 0;
         }

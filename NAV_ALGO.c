@@ -18,8 +18,8 @@
 typedef struct
 {
     NAV_POINT_T robot_pos;
-    uint8_t submap_x;
-    uint8_t submap_y;
+    signed int16_t submap_x;
+    signed int16_t submap_z;
 } robot_position_t;
 
 typedef struct
@@ -126,9 +126,13 @@ NAV_CURRENT_POS_T nav_algo_get_current_pos(void)
     return NULL;
 }
 
-NAV_SUBMAP_T *nav_algo_get_submap(int submap_x, int submap_y)
+NAV_SUBMAP_T *nav_algo_get_submap(int submap_x, int submap_z)
 {
-    return NULL;
+    uint8_t submap_x_element = (uint8_t) ((submap_x + (MAX_POINTS_PER_SUBMAP / 2)) & 0xFF);
+    uint8_t submap_z_element = (uint8_t) ((submap_z + (MAX_POINTS_PER_SUBMAP / 2)) & 0xFF);
+    if(submap_x_element >= MAX_POINTS_PER_SUBMAP) submap_x_element = MAX_POINTS_PER_SUBMAP - 1;
+    if(submap_z_element >= MAX_POINTS_PER_SUBMAP) submap_z_element = MAX_POINTS_PER_SUBMAP - 1;
+    return &(s_nav_map.map[submap_x_element][submap_z_element])
 }
 
 static void nav_algo_queue_handler(component_handle_t component_type, uint8_t message_type, void* message_data, size_t message_size)
@@ -330,6 +334,90 @@ static NAV_POINT_T nav_algo_convert_node_details_to_landmark(dfs_feature_details
     return return_point;
 }
 
+static uint8_t nav_algo_move_robot_according_to_transform(NAV_POINT_T *current, NAV_POINT_T transform, uint8_t op)
+{
+    //y axis is up/down!!! need to make sure that this doesn't drift problematically for ground
+    uint32_t current_z = current->xyz_pos & 0x000003FF;
+    uint32_t current_y = current->xyz_pos & 0x000FFC00;
+    uint32_t current_x = current->xyz_pos & 0x3FF00000;
+    uint32_t transform_z = transform.xyz_pos & 0x000003FF;
+    uint32_t transform_y = transform.xyz_pos & 0x000FFC00;
+    uint32_t transform_x = transform.xyz_pos & 0x3FF00000;
+    uint8_t return_overflow = 0;
+    switch(op)
+    {
+        case 0: //add
+            uint32_t new_z = current_z + transform_z;
+            uint32_t new_y = current_y + transform_y;
+            uint32_t new_x = current_x + transform_x;
+            current->rotation += transform.rotation;
+            break;
+        case 1: //subtract current - transform
+            uint32_t new_z = current_z - transform_z;
+            uint32_t new_y = current_y - transform_y;
+            uint32_t new_x = current_x - transform_x;
+            current->rotation -= transform.rotation;
+            break;
+        case 2: //subtract transform - current
+            uint32_t new_z = transform_z - current_z;
+            uint32_t new_y = transform_y - current_y;
+            uint32_t new_x = transform_x - current_x;
+            current->rotation = transform.rotation - current->rotation;
+            break;
+        case 3: //add, excepting the y vector
+            uint32_t new_z = transform_z - current_z;
+            uint32_t new_y = current_y;
+            uint32_t new_x = transform_x - current_x;
+            current->rotation += transform.rotation;
+            break;
+        default:
+            break;
+    }
+    if(new_z > 0x0400)
+    {
+        current->xyz_pos = new_z & 0x03FF;
+        return_overflow = 1;
+    }
+    else if(new_z > 0x0800)
+    {
+        current->xyz_pos = (~new_z + 1) & 0x03FF;
+        return_overflow = 2;
+    }
+    else
+    {
+        current->xyz_pos = new_z & 0x03FF;
+    }
+    if(new_y > 0x00100000)
+    {
+        current->xyz_pos += new_y & 0x000FFC00;
+        return_overflow += 4;
+    }
+    else if(new_y > 0x00200000)
+    {
+        current->xyz_pos += (~new_y + 1) & 0x000FFC00;
+        return_overflow += 8;
+    }
+    else
+    {
+        current->xyz_pos += new_y & 0x000FFC00;
+    }
+    if(new_x > 0x40000000)
+    {
+        current->xyz_pos += new_x & 0x3FF00000;
+        return_overflow += 16;
+    }
+    else if(new_x > 0x80000000)
+    {
+        current->xyz_pos += (~new_x + 1) & 0x3FF00000;
+        return_overflow += 32;
+    }
+    else
+    {
+        current->xyz_pos += new_x & 0x3FF00000;
+    }
+    return return_overflow;
+}
+
 //read tof map and run error vs existing map to estimate movement
 //also create and adjust objects on each submap
 static void nav_algo_check_tof_array_against_map(TOF_DATA_t* tof_data)
@@ -343,32 +431,36 @@ static void nav_algo_check_tof_array_against_map(TOF_DATA_t* tof_data)
         return;
     }
 
-    if(s_is_debug_enabled && check_is_queue_active(0))
-    {
-        //send features list to the message queue
-		message_info_t convert_feature_msg;
-        feature_extraction_t* msg_features_list = malloc(sizeof(feature_extraction_t));
-        memcpy(msg_features_list, features_list, sizeof(feature_extraction_t));
-		convert_feature_msg.message_data = (void*) msg_features_list;
-		convert_feature_msg.message_size = sizeof(feature_extraction_t);
-		convert_feature_msg.is_pointer = true;
-		convert_feature_msg.component_handle = nav_algo_public_component;
-		convert_feature_msg.message_type = NAV_RAW_FEATURE_DATA;
-		send_message_to_normal_queue(convert_feature_msg);
-    }
-
     NAV_POINT_T landmark_list[MAX_FEATURES_PER_TOF_ARRAY] = {0};
     for(uint8_t list_iter = 0; list_iter < features_list.number_of_features; list_iter++)
     {
         landmark_list[list_iter] = nav_algo_convert_node_details_to_landmark(features_list.node_details[list_iter]);
     }
 
+    if(s_is_debug_enabled && check_is_queue_active(0))
+    {
+        //send features list to the message queue
+		message_info_t convert_feature_msg;
+        NAV_POINT_T* msg_features_list = malloc(features_list.number_of_features * sizeof(NAV_POINT_T));
+        memcpy(msg_features_list, landmark_list, features_list.number_of_features * sizeof(NAV_POINT_T));
+		convert_feature_msg.message_data = (void*) msg_features_list;
+		convert_feature_msg.message_size = features_list.number_of_features * sizeof(NAV_POINT_T);
+		convert_feature_msg.is_pointer = true;
+		convert_feature_msg.component_handle = nav_algo_public_component;
+		convert_feature_msg.message_type = NAV_RAW_FEATURE_DATA;
+		send_message_to_normal_queue(convert_feature_msg);
+    }
+
     //step 2: find 2 most confident landmarks
     //Sort landmark_list here?
 
     //step 3: determine rotation + translation error of landmark 1 to each existing landmark on submap
+    NAV_POINT_T landmark_list_transformed[MAX_POINTS_PER_SUBMAP] = {0};
     NAV_POINT_T landmark_error[MAX_POINTS_PER_SUBMAP] = {0};
-    NAV_SUBMAP_T * submap_pointer = &(s_nav_map.map[s_nav_robot_position.submap_x][s_nav_robot_position.submap_y]); //maybe have a getter/setter for this...
+    
+    NAV_SUBMAP_T * submap_pointer = nav_algo_get_submap(s_nav_robot_position.submap_x, s_nav_robot_position.submap_z); //maybe have a getter/setter for this...
+    uint8_t closest_point = MAX_POINTS_PER_SUBMAP;
+    uint32_t least_error = 0xFF000000;
     for(uint8_t iter = 0; iter < MAX_POINTS_PER_SUBMAP; iter++)
     {
         if(!submap_pointer->pointCloud[iter].confidence)
@@ -376,19 +468,42 @@ static void nav_algo_check_tof_array_against_map(TOF_DATA_t* tof_data)
             //break out once pointclouds start becoming invalid
             break;
         }
+        //need to transform into the fram of reference of the robot position first
+        landmark_list_transformed[iter].xyz_pos = landmark_list[0].xyz_pos;
+        landmark_list_transformed[iter].rotation = landmark_list[0].rotation;
+        nav_algo_move_robot_according_to_transform(landmark_list_transformed[iter], s_nav_robot_position.robot_pos, 0);
         //calculate error of pointCloud[iter] - features_list[0]
-        landmark_error.xyz_pos = submap_pointer->pointCloud[iter].xyz_pos - landmark_list[0].xyz_pos;
-        landmark_error.width = submap_pointer->pointCloud[iter].width - landmark_list[0].width;
-        landmark_error.height = submap_pointer->pointCloud[iter].height - landmark_list[0].height;
-        landmark_error.rotation = submap_pointer->pointCloud[iter].rotation - landmark_list[0].rotation;
+        landmark_error[iter] = landmark_list_transformed[iter];
+        nav_algo_move_robot_according_to_transform(landmark_error[iter], submap_pointer->pointCloud[iter], 2);
+        landmark_error[iter].width = submap_pointer->pointCloud[iter].width - landmark_list[0].width;
+        landmark_error[iter].height = submap_pointer->pointCloud[iter].height - landmark_list[0].height;
         //if error is sufficiently close to s_nav_robot_position for any given feature in the pointcloud, we have matched the feature.
         //otherwise, continue with step 3.1
+
+        //error cost function.
+        uint32_t feature_error = (landmark_error[iter].rotation << 16) + (landmark_error[iter].width << 8) + landmark_error[iter].height;
+        if(feature_error < least_error)
+        {
+            least_error = feature_error;
+            closest_point = iter;
+        }
     }
 
-    if(s_is_debug_enabled)
+    if(s_is_debug_enabled && check_is_queue_active(0))
     {
         //send transform list to the message queue
+		message_info_t transform_msg;
+        NAV_POINT_T* msg_features_list = malloc(MAX_POINTS_PER_SUBMAP * sizeof(NAV_POINT_T));
+        memcpy(msg_features_list, landmark_list, MAX_POINTS_PER_SUBMAP * sizeof(NAV_POINT_T));
+		transform_msg.message_data = (void*) msg_features_list;
+		transform_msg.message_size = MAX_POINTS_PER_SUBMAP * sizeof(NAV_POINT_T);
+		transform_msg.is_pointer = true;
+		transform_msg.component_handle = nav_algo_public_component;
+		transform_msg.message_type = NAV_RAW_FEATURE_DATA;
+		send_message_to_normal_queue(transform_msg);
     }
+
+
 
     //step 3.1: if necessary, determine rotation + translation error of landmark 2 to each existing landmark on submap
 
@@ -398,7 +513,36 @@ static void nav_algo_check_tof_array_against_map(TOF_DATA_t* tof_data)
 
     //step 4: update location
 
+    //TODO: calculate which entry in landmark error list has the lowest error
+    if(closest_point < MAX_POINTS_PER_SUBMAP)
+    {
+        uint8_t overflows = nav_algo_move_robot_according_to_transform(s_nav_robot_position.robot_pos, landmark_error[closest_point], 3);
+        if(overflows & 0x01)
+        {
+            s_nav_robot_position.submap_z++;
+        }
+        if(overflows & 0x02)
+        {
+            s_nav_robot_position.submap_z--;
+        }
+        if(overflows & 0x10)
+        {
+            s_nav_robot_position.submap_x++;
+        }
+        if(overflows & 0x20)
+        {
+            s_nav_robot_position.submap_x--;
+        }
+    }
+    
     //step 5: update submap with map landmark info
+
+    //TODO: again, entry in landmark error list with lowest cost needs to be calculated
+    //For testing purposes, just replace all the old features with the latest batch
+    for(uint8_t iter_landmark = 0; iter_landmark < MAX_POINTS_PER_SUBMAP; iter_landmark++)
+    {
+        submap_pointer->pointCloud[iter_landmark] = landmark_list_transformed[iter_landmark];
+    }
 }
 
 //Basic mapping idea:
